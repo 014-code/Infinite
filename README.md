@@ -282,7 +282,7 @@ Camera默认是透视相机，也可以显式调用 `setView(position, target, u
 ## 持续集成
 
 工作流配置为：GitHub Actions在Windows的MSYS2 UCRT64环境中配置并编译全部目标、按cpu标签运行无窗口测试；另一个Linux任务在Xvfb和Mesa软件OpenGL下运行完整像素回归及示例冒烟测试。软件渲染回归不能替代本机Windows驱动检查。
-可用 `ctest --preset msys2-ucrt64-debug -L cpu` 筛选无窗口测试，`-L graphics` 筛选真实OpenGL测试；附加 `--show-only` 只列出测试，不执行。工作流尚未推送执行，不能视为远端CI已经通过。
+可用 `ctest --preset msys2-ucrt64-debug -L cpu` 筛选无窗口测试，`-L graphics` 筛选真实OpenGL测试；附加 `--show-only` 只列出测试，不执行。工作流在每次push与PR时自动执行，最近两次提交（`cd89a57` 物理系统、`09dcead` 文档入库）在两个任务上均通过；用 `gh run list` 或仓库Actions页查看结果。远端软件渲染通过不等于本机Windows驱动通过，两侧都需要看。
 
 运行 `runtime/examples/scene_objects/scene_objects.exe` 可以看到共享网格的两个旋转立方体、
 两张半透明色板、不透明背景和前景遮挡条。WASD移动摄像机，按住鼠标右键拖动观察，Space/Ctrl升降，Shift加速，R复位；方向键移动暖色立方体，Escape退出。
