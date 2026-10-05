@@ -1,6 +1,7 @@
 #pragma once
 
 #include "math/Transform.h"
+#include "scene/components/PhysicsBodyComponent.h"
 #include "scene/components/Renderable.h"
 
 #include <cstdint>
@@ -57,6 +58,15 @@ public:
     const glm::vec3 &sortOrigin() const;
     void setSortOrigin(const glm::vec3 &origin);
 
+    // 物理组件：以物体的当前位姿把形状注册为静态碰撞体。
+    // 借用外部PhysicsWorld，世界必须比Scene和物体活得更久；平面形状请直接注册到世界。
+    // 世界销毁后组件仍指向旧世界指针，因此不允许世界先于Scene销毁。
+    void setPhysicsBody(PhysicsWorld &world, const CollisionShape &shape, const PhysicsFilter &filter = {});
+    // 注销静态碰撞体；物体被删除时组件析构同样会注销。
+    void clearPhysicsBody();
+    PhysicsBodyComponent &physicsBody();
+    const PhysicsBodyComponent &physicsBody() const;
+
     // 物体的身份和地址由Scene管理，不允许复制或移动出另一个同ID物体。
     GameObject(const GameObject &) = delete;
     GameObject &operator=(const GameObject &) = delete;
@@ -74,4 +84,6 @@ private:
     std::shared_ptr<UpdateCallback> updateCallback_;
     // 渲染资源和排序参考点已经封装到组件中，GameObject只保留组件本身。
     Renderable renderable_;
+    // 物理注册关系同样封装在组件里；物体被Scene删除时由组件析构注销静态体。
+    PhysicsBodyComponent physicsBody_;
 };

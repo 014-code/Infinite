@@ -71,7 +71,7 @@ endforeach()
 # 实际启动全部示例及空白模板，隐藏窗口绘制三帧并检查像素。
 # 使用已有示例目标，不调用测试helper重新配置示例；运行目录特意不同于资源源码目录。
 foreach(EXAMPLE_NAME IN ITEMS color_triangle textured_quad diffuse_lighting player_controller textured_cube
-    alpha_blending scene_objects asset_scene gltf_model application_template material_showcase primitive_shapes scene_lighting pbr_materials gltf_pbr node_animation skeletal_animation directional_shadow)
+    alpha_blending scene_objects asset_scene gltf_model application_template material_showcase primitive_shapes scene_lighting pbr_materials gltf_pbr node_animation skeletal_animation directional_shadow physics_demo)
     add_test(NAME infinite_example_${EXAMPLE_NAME}_smoke
         COMMAND $<TARGET_FILE:infinite_example_${EXAMPLE_NAME}> --smoke-test)
     set_tests_properties(infinite_example_${EXAMPLE_NAME}_smoke PROPERTIES
@@ -110,6 +110,27 @@ configure_engine_test(infinite_scene_resource_test ARGS "${CMAKE_CURRENT_BINARY_
 add_executable(infinite_log_test tests/log_test.cpp)
 configure_engine_test(infinite_log_test
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" ARGS "${CMAKE_CURRENT_BINARY_DIR}/tests/logging")
+
+# 物理基础：形状/射线/AABB数学全部为无窗口纯CPU测试，不创建OpenGL上下文。
+foreach(PHYSICS_TEST IN ITEMS physics_shapes physics_math physics_raycast)
+    add_executable(infinite_${PHYSICS_TEST}_test tests/${PHYSICS_TEST}_test.cpp)
+    configure_engine_test(infinite_${PHYSICS_TEST}_test)
+endforeach()
+# 碰撞世界与narrowphase同样不依赖窗口；场景侧组件集成也在无窗口下验证。
+foreach(PHYSICS_WORLD_TEST IN ITEMS physics_collision physics_world physics_body_component)
+    add_executable(infinite_${PHYSICS_WORLD_TEST}_test tests/${PHYSICS_WORLD_TEST}_test.cpp)
+    configure_engine_test(infinite_${PHYSICS_WORLD_TEST}_test)
+endforeach()
+# 角色控制器与刚体动力学：纯CPU模拟，不创建窗口。
+foreach(PHYSICS_SIMULATION_TEST IN ITEMS physics_character physics_rigidbody)
+    add_executable(infinite_${PHYSICS_SIMULATION_TEST}_test tests/${PHYSICS_SIMULATION_TEST}_test.cpp)
+    configure_engine_test(infinite_${PHYSICS_SIMULATION_TEST}_test)
+endforeach()
+
+# 示例层的摄像机相对输入：纯方向数学，不需要窗口；防止出现左右颠倒之类的回归。
+add_executable(infinite_camera_relative_input_test tests/camera_relative_input_test.cpp)
+target_include_directories(infinite_camera_relative_input_test PRIVATE examples)
+configure_engine_test(infinite_camera_relative_input_test)
 
 # 同时覆盖启用/禁用诊断宏；显式checkErrors在两种编译方式中都可用。
 foreach(DIAGNOSTIC_MODE IN ITEMS debug release)
@@ -156,4 +177,8 @@ set_tests_properties(
     infinite_scene_update_test infinite_input_state_test infinite_camera_test infinite_camera_controller_test
     infinite_input_action_test infinite_mesh_loader_test infinite_log_test infinite_image_loader_test
     infinite_frame_timing_test infinite_scene_serialization_test infinite_animation_sampler_test
+    infinite_physics_shapes_test infinite_physics_math_test infinite_physics_raycast_test
+    infinite_physics_collision_test infinite_physics_world_test infinite_physics_body_component_test
+    infinite_physics_character_test infinite_physics_rigidbody_test
+    infinite_camera_relative_input_test
     PROPERTIES LABELS "cpu")

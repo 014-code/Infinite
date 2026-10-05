@@ -2,6 +2,8 @@
 
 一个使用 C++、OpenGL 和 GLFW 编写的游戏引擎学习项目。
 
+**从零上手请先读[引擎入门教程](docs/引擎入门教程.md)**：环境准备（含 PATH 陷阱）→ 构建与测试 → 引擎心智模型与生命周期铁律 → 逐模块用法（渲染/光照/模型/动画/物理/输入/存档）→ 写测试 → 交付 → 常见问题排查。
+
 功能总览、对应示例及尚不支持的边界见[项目功能清单](docs/项目功能清单.md)。先从这份索引了解框架，再按需阅读专题说明。
 
 本轮维护内容与测量记录见[维护优化记录](docs/维护优化记录.md)，新增测试的方式见[测试维护约定](tests/README.md)。
@@ -24,6 +26,7 @@ src/
 ├── platform/   # 窗口和OpenGL上下文
 ├── scene/      # 游戏对象、组件、对象所有权、场景管理和场景序列化
 ├── resources/  # Shader、Texture、Mesh、Material和Model缓存
+├── physics/    # 碰撞形状、AABB/射线、静态碰撞世界、角色控制器、刚体
 └── graphics/
     ├── camera/     # Camera
     ├── lighting/   # SceneLighting、方向光、点光源和聚光灯
@@ -50,8 +53,11 @@ runtime/        # 各示例的可执行文件、资源和运行库
 - `application_template`：可直接复制的空白应用模板，不创建任何默认物体。
 - `primitive_shapes`：使用引擎内置创建接口生成平面、立方体、圆盘、球体、圆柱和圆锥，不手写顶点数据。
 - `scene_lighting`：场景级环境光、多方向光、点光源和聚光灯，演示光照与材质职责分离。
+- `physics_demo`：静态地形（地面、斜坡、陡坡、台阶）上的角色控制器、动态刚体球、射线放置方块和碰撞体可视化。按键与边界见[物理系统说明](docs/物理系统说明.md)。
 
 新增独立示例：`pbr_materials`（材质对照）、`gltf_pbr`（原版Avocado）、`node_animation`（刚体动画）、`skeletal_animation`（Rigged Figure双实例）、`directional_shadow`（主方向光投影）。
+
+物理系统的接口、运行方式、生命周期规则与明确边界见[物理系统说明](docs/物理系统说明.md)；阶段划分见[物理系统实施计划](docs/物理系统实施计划.md)。
 
 场景光照的接口、限制和测试见[场景光照说明](docs/场景光照说明.md)；阶段状态见[渲染与动画实施计划](docs/渲染与动画实施计划.md)。
 

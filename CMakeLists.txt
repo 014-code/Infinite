@@ -14,6 +14,14 @@ find_package(glm CONFIG REQUIRED)
 find_path(STB_IMAGE_INCLUDE_DIR NAMES stb/stb_image.h REQUIRED)
 
 set(ENGINE_SOURCES
+    src/physics/math/Aabb.cpp
+    src/physics/math/Ray.cpp
+    src/physics/math/Raycast.cpp
+    src/physics/math/ClosestPoint.cpp
+    src/physics/shapes/CollisionShape.cpp
+    src/physics/world/ShapeCollision.cpp
+    src/physics/world/PhysicsWorld.cpp
+    src/physics/character/CharacterController.cpp
     src/graphics/shaders/SkinShaderSource.cpp
     src/graphics/lighting/DirectionalShadowSettings.cpp
     src/graphics/rendering/shadows/DirectionalShadowMap.cpp
@@ -59,6 +67,7 @@ set(ENGINE_SOURCES
     src/scene/SceneSerializer.cpp
     src/scene/ModelInstantiator.cpp
     src/scene/components/Renderable.cpp
+    src/scene/components/PhysicsBodyComponent.cpp
     src/platform/Window.cpp
     src/resources/ResourceManager.cpp
     src/resources/Model.cpp
@@ -309,6 +318,13 @@ target_include_directories(infinite_example_directional_shadow PRIVATE examples)
 target_compile_options(infinite_example_directional_shadow PRIVATE -Wall -Wextra)
 target_link_libraries(infinite_example_directional_shadow PRIVATE infinite_engine)
 configure_engine_example(infinite_example_directional_shadow directional_shadow)
+
+# 物理示例：静态地形、角色控制器、动态刚体、射线放置与碰撞体调试可视化。
+add_executable(infinite_example_physics_demo examples/physics_demo/main.cpp)
+target_include_directories(infinite_example_physics_demo PRIVATE examples)
+target_compile_options(infinite_example_physics_demo PRIVATE -Wall -Wextra)
+target_link_libraries(infinite_example_physics_demo PRIVATE infinite_engine)
+configure_engine_example(infinite_example_physics_demo physics_demo)
 
 if(BUILD_TESTING)
     include(cmake/EngineTests.cmake)

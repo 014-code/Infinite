@@ -81,3 +81,24 @@ void GameObject::setSortOrigin(const glm::vec3 &origin)
 {
     renderable_.setSortOrigin(origin);
 }
+
+void GameObject::setPhysicsBody(PhysicsWorld &world, const CollisionShape &shape, const PhysicsFilter &filter)
+{
+    // 物体自己的位姿作为注册位姿，避免注册后还要额外同步一次。
+    physicsBody_.attach(world, shape, transform.position, transform.rotation(), filter);
+}
+
+void GameObject::clearPhysicsBody()
+{
+    physicsBody_.detach();
+}
+
+PhysicsBodyComponent &GameObject::physicsBody()
+{
+    return physicsBody_;
+}
+
+const PhysicsBodyComponent &GameObject::physicsBody() const
+{
+    return physicsBody_;
+}
