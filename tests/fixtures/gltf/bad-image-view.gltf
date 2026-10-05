@@ -1,0 +1,9 @@
+{
+  "asset": {"version": "2.0"},
+  "scene": 0,
+  "scenes": [{"nodes": [0]}],
+  "nodes": [{}],
+  "buffers": [{"byteLength": 4, "uri": "data:application/octet-stream;base64,AAAAAA=="}],
+  "bufferViews": [{"buffer": 0, "byteOffset": 3, "byteLength": 8}],
+  "images": [{"bufferView": 0, "mimeType": "image/png"}]
+}

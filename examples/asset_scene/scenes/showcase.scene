@@ -1,0 +1,19 @@
+INFINITE_SCENE 3
+OBJECT_COUNT 2
+OBJECT 1 -1 1 "旋转主立方体"
+POSITION 0 0 0
+ROTATION_QUAT 0.15 0.2 0.05 0.96
+SCALE 0.8 0.8 0.8
+SORT_ORIGIN 0 0 0
+MESH "../assets/cube.obj"
+MATERIAL "../materials/checker.material"
+END_OBJECT
+OBJECT 2 0 1 "跟随并自转的小立方体"
+POSITION 1.65 0.3 0
+ROTATION_QUAT 0 0 0 1
+SCALE 0.4 0.4 0.4
+SORT_ORIGIN 0 0 0
+MESH "../assets/cube.obj"
+MATERIAL "../materials/checker.material"
+END_OBJECT
+END_SCENE

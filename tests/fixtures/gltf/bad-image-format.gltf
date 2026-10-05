@@ -1,0 +1,7 @@
+{
+  "asset": {"version": "2.0"},
+  "scene": 0,
+  "scenes": [{"nodes": [0]}],
+  "nodes": [{}],
+  "images": [{"uri": "data:image/png;base64,AAAA"}]
+}

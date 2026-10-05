@@ -1,0 +1,11 @@
+{
+  "model": "Lantern",
+  "repository": "KhronosGroup/glTF-Sample-Assets",
+  "revision": "edc7c9e67c639d230715049ee31f9a96a6babbbe",
+  "sourceUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/Lantern/glTF-Binary/Lantern.glb",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "originalSha256": "A79458C4B02D695187A952F23A63B8BF278E7BC3D316A3C2A314F2D6974181F1",
+  "previewSha256": "8AE36E7838FD38327C77EE0C4B633CA5CB7490F6D877BC86DE706FE31BD82BF3",
+  "modification": "Removed 3 TANGENT attribute references; binary chunk unchanged. Preview uses base color and diffuse lighting only."
+}

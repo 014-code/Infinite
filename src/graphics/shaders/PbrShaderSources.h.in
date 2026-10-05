@@ -1,0 +1,10 @@
+#pragma once
+namespace PbrShaders
+{
+inline constexpr const char *vertex = R"GLSL(@PBR_VERTEX_SOURCE@)GLSL";
+inline constexpr const char *fragment = R"GLSL(@PBR_FRAGMENT_SOURCE@)GLSL";
+inline constexpr const char *outputVertex = R"GLSL(@OUTPUT_VERTEX_SOURCE@)GLSL";
+inline constexpr const char *outputFragment = R"GLSL(@OUTPUT_FRAGMENT_SOURCE@)GLSL";
+inline constexpr const char *shadowVertex = R"GLSL(@SHADOW_VERTEX_SOURCE@)GLSL";
+inline constexpr const char *shadowFragment = R"GLSL(@SHADOW_FRAGMENT_SOURCE@)GLSL";
+}

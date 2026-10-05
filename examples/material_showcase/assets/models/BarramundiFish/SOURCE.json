@@ -1,0 +1,11 @@
+{
+  "model": "BarramundiFish",
+  "repository": "KhronosGroup/glTF-Sample-Assets",
+  "revision": "edc7c9e67c639d230715049ee31f9a96a6babbbe",
+  "sourceUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/BarramundiFish/glTF-Binary/BarramundiFish.glb",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "originalSha256": "ECC3BAFB6B00F2C8B810863C388E3768A7B7EA0D0335E8CB8C574C266E571F4A",
+  "previewSha256": "4D9ADA177C32696173F064DEAEF71A802F4F0A928EF2F66E7CA0FC44C2E27BFC",
+  "modification": "Removed 1 TANGENT attribute references; binary chunk unchanged. Preview uses base color and diffuse lighting only."
+}

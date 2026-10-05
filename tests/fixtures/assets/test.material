@@ -1,0 +1,8 @@
+INFINITE_MATERIAL 1
+VERTEX_SHADER "../../../examples/scene_objects/shaders/scene.vert"
+FRAGMENT_SHADER "../../../examples/scene_objects/shaders/scene.frag"
+TEXTURE "../../../examples/textured_quad/assets/checker.ppm"
+BASE_COLOR 1 0.5 0.25 1
+RENDER_MODE Opaque
+CULL_MODE Back
+END_MATERIAL

@@ -1,0 +1,60 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "msys2-ucrt64-debug",
+      "displayName": "MSYS2 UCRT64 Debug (E drive)",
+      "description": "本机E盘工具链；默认开启测试，单线程编译避免内存不足。",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-ucrt64",
+      "environment": {
+        "INFINITE_UCRT64_ROOT": "E:/msys64/ucrt64",
+        "PATH": "$env{INFINITE_UCRT64_ROOT}/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "$env{INFINITE_UCRT64_ROOT}/bin/g++.exe",
+        "CMAKE_MAKE_PROGRAM": "$env{INFINITE_UCRT64_ROOT}/bin/ninja.exe",
+        "CMAKE_PREFIX_PATH": "$env{INFINITE_UCRT64_ROOT}",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "msys2-ucrt64-release",
+      "inherits": "msys2-ucrt64-debug",
+      "displayName": "MSYS2 UCRT64 Release (isolated)",
+      "binaryDir": "${sourceDir}/build-ucrt64-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "RUNTIME_DIRECTORY": "${sourceDir}/build-ucrt64-release/runtime"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "msys2-ucrt64-debug",
+      "configurePreset": "msys2-ucrt64-debug",
+      "jobs": 1
+    },
+    {
+      "name": "msys2-ucrt64-release",
+      "configurePreset": "msys2-ucrt64-release",
+      "jobs": 1
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "msys2-ucrt64-debug",
+      "configurePreset": "msys2-ucrt64-debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "jobs": 1, "noTestsAction": "error" }
+    },
+    {
+      "name": "msys2-ucrt64-release",
+      "configurePreset": "msys2-ucrt64-release",
+      "output": { "outputOnFailure": true },
+      "execution": { "jobs": 1, "noTestsAction": "error" }
+    }
+  ]
+}

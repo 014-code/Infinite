@@ -1,0 +1,16 @@
+{
+  "asset": {"version": "2.0", "generator": "Infinite refactor regression"},
+  "scene": 0,
+  "scenes": [{"nodes": [0]}],
+  "nodes": [{"mesh": 0}],
+  "buffers": [{"byteLength": 140, "uri": "mesh.bin"}],
+  "bufferViews": [
+    {"buffer": 0, "byteOffset": 0, "byteLength": 128, "byteStride": 32},
+    {"buffer": 0, "byteOffset": 128, "byteLength": 12}
+  ],
+  "accessors": [
+    {"bufferView": 0, "componentType": 5126, "count": 4, "type": "VEC3"},
+    {"bufferView": 1, "componentType": 5123, "count": 6, "type": "SCALAR"}
+  ],
+  "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}]
+}

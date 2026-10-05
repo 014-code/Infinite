@@ -1,0 +1,9 @@
+#pragma once
+
+// 由CMake从独立GLSL文件生成，不手工编辑生成文件。
+// 编译进引擎的Shader不依赖运行目录，修改原GLSL后构建系统会重新生成。
+namespace PrimitiveShaders
+{
+    inline constexpr char vertex[] = R"glsl(@PRIMITIVE_VERTEX_SOURCE@)glsl";
+    inline constexpr char fragment[] = R"glsl(@PRIMITIVE_FRAGMENT_SOURCE@)glsl";
+}

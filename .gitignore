@@ -1,0 +1,16 @@
+/build*/
+/cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+CMakeUserPresets.json
+# 示例运行日志是本机诊断信息，不作为源码提交。
+/runtime/examples/*/logs/
+# 构建产物与旧版可执行文件，体积大且可由构建重新生成。
+/runtime/examples/
+/runtime/_legacy/
+# 设计草稿与本机工具数据，不属于仓库内容。
+/docs/
+/.workbuddy/
+/后续设计相关-不放git上.md

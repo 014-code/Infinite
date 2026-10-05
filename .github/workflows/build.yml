@@ -1,0 +1,58 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-ucrt64:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-glfw
+            mingw-w64-ucrt-x86_64-glew
+            mingw-w64-ucrt-x86_64-glm
+            mingw-w64-ucrt-x86_64-stb
+      # 云端安装盘符不同，不使用为本机E盘配置的Preset。
+      - name: Configure
+        run: cmake -S . -B build-ci -G Ninja -DCMAKE_CXX_COMPILER=/ucrt64/bin/g++.exe -DCMAKE_PREFIX_PATH=/ucrt64 -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+      - name: Build framework, examples and tests
+        run: cmake --build build-ci --parallel 1
+      # Windows托管机不保证OpenGL 3.3上下文；图形回归由下一个软件渲染任务执行。
+      - name: CPU tests
+        run: ctest --test-dir build-ci -L cpu --output-on-failure --no-tests=error
+
+  software-opengl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and software rendering dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ libgl1-mesa-dev libgl1-mesa-dri libglx-mesa0 libglfw3-dev libglew-dev libglm-dev libstb-dev xvfb xauth
+      - name: Configure
+        run: cmake -S . -B build-ci -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build-ci --parallel 1
+      # Xvfb提供虚拟显示，Mesa在CPU上执行真实OpenGL调用，不跳过像素断言。
+      - name: Full suite including graphics and example smoke tests
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" ctest --test-dir build-ci --output-on-failure --no-tests=error
