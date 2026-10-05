@@ -11,6 +11,15 @@ CMakeUserPresets.json
 /runtime/examples/
 /runtime/_legacy/
 # 设计草稿与本机工具数据，不属于仓库内容。
-/docs/
+# 文档默认不入库：只放行面向使用者的说明，计划类草稿保留在本地。
+/docs/*
+!/docs/引擎入门教程.md
+!/docs/项目功能清单.md
+!/docs/维护优化记录.md
+!/docs/渲染接口约定.md
+!/docs/应用运行层使用说明.md
+!/docs/物理系统说明.md
 /.workbuddy/
+# IDE 工程目录与工具数据。
+/.idea/
 /后续设计相关-不放git上.md
