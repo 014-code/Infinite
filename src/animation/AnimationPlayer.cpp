@@ -6,6 +6,37 @@
 #include <cmath>
 #include <stdexcept>
 
+namespace
+{
+    void emitEvents(const AnimationClip &clip, double from, double to, bool looping,
+        const AnimationPlayer::EventCallback &callback)
+    {
+        if (!callback || clip.events().empty() || to == from)
+        {
+            return;
+        }
+        const auto emitRange = [&](double begin, double end)
+        {
+            for (const auto &event : clip.events())
+            {
+                if (event.time > begin && event.time <= end)
+                {
+                    callback(event);
+                }
+            }
+        };
+        if (looping && to < from)
+        {
+            emitRange(from, static_cast<double>(clip.duration()));
+            emitRange(-1.0, to);
+        }
+        else
+        {
+            emitRange(from, to);
+        }
+    }
+}
+
 AnimationPlayer::AnimationPlayer(Scene &scene, std::shared_ptr<const Model> model, const ModelInstance &instance)
     : model_(std::move(model)), owner_(&scene), rootId_(instance.rootId), nodeIds_(instance.nodeIds)
 {
@@ -101,7 +132,10 @@ void AnimationPlayer::update(Scene &scene, float deltaTime)
             return duration <= 0 ? 0.0 : (looping_ ? std::fmod(next, duration) : std::min(next, duration));
         };
         transition_.fromTime = advance(transition_.fromClip, transition_.fromTime);
+        const double previousToTime = transition_.toTime;
         transition_.toTime = advance(transition_.toClip, transition_.toTime);
+        emitEvents(model_->animations()[transition_.toClip], previousToTime, transition_.toTime,
+            looping_, eventCallback_);
         transition_.elapsed += deltaTime;
         const float weight = transition_.duration <= 0 ? 1.0f : static_cast<float>(std::min(1.0, transition_.elapsed / transition_.duration));
         apply(scene, AnimationBlender::blend(
@@ -117,6 +151,7 @@ void AnimationPlayer::update(Scene &scene, float deltaTime)
     // 用double保存时钟，大帧间隔/速度不会使float相乘溢出。单帧片段不存在取模分母。
     const double advanced = time_ + static_cast<double>(deltaTime) * speed_;
     const double target = duration <= 0 ? 0 : (looping_ ? std::fmod(advanced, duration) : std::min(advanced, duration));
+    emitEvents(clip, time_, target, looping_, eventCallback_);
     apply(scene, AnimationSampler::sample(clip, target, restPose_));
     time_ = target;
     if (duration <= 0 || (!looping_ && advanced >= duration)) { playing_ = false; }

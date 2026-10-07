@@ -2,7 +2,9 @@
 
 #include "AnimationSampler.h"
 #include "scene/ModelInstantiator.h"
+#include <functional>
 #include <memory>
+#include <utility>
 
 // 一个播放器对应一个模型实例。共享只读Model，独享时间/姿态/节点ID。
 // 不拥有Scene，也不在析构中访问Scene；每次操作显式传入仍存活的Scene。
@@ -23,6 +25,9 @@ public:
     void update(Scene &scene, float deltaTime);
     void setLooping(bool looping) noexcept { looping_ = looping; }
     void setSpeed(float speed); // 有限、非负，0表示冻结；首版不支持倒放。
+    using EventCallback = std::function<void(const AnimationEvent &)>;
+    // 事件在时间从旧值推进到新值时触发；回调属于应用层，不在动画模块内播放音效或创建粒子。
+    void setEventCallback(EventCallback callback) { eventCallback_ = std::move(callback); }
     bool isPlaying() const noexcept { return playing_; }
     bool isSelected() const noexcept { return selected_; }
     double time() const noexcept { return time_; }
@@ -42,6 +47,7 @@ private:
     bool selected_ = false;
     bool playing_ = false;
     bool looping_ = true;
+    EventCallback eventCallback_;
     struct Transition
     {
         bool active = false;

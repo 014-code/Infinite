@@ -7,7 +7,7 @@
             "cStandard": "c17",
             "cppStandard": "c++17",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/**",
                 "E:/msys64/ucrt64/include",
                 "E:/msys64/usr/include"
             ]

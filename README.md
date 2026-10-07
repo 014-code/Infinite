@@ -2,7 +2,7 @@
 
 一个使用 C++、OpenGL 和 GLFW 编写的游戏引擎学习项目。
 
-**从零上手请先读[引擎入门教程](docs/引擎入门教程.md)**：环境准备（含 PATH 陷阱）→ 构建与测试 → 引擎心智模型与生命周期铁律 → 逐模块用法（渲染/光照/模型/动画/物理/输入/存档）→ 写测试 → 交付 → 常见问题排查。
+**从零上手请先读[引擎入门教程](docs/引擎入门教程.md)**：环境准备（含 PATH 陷阱）→ 构建与测试 → 引擎心智模型与生命周期铁律 → 逐模块用法（渲染/光照/模型/动画/物理/输入/组件/UI/游戏流程/音频/粒子/存档）→ 写测试 → 交付 → 常见问题排查。
 
 功能总览、对应示例及尚不支持的边界见[项目功能清单](docs/项目功能清单.md)。先从这份索引了解框架，再按需阅读专题说明。
 
@@ -12,19 +12,26 @@
 glTF基础颜色预览运行 `runtime/examples/gltf_model/gltf_model.exe`，详见 [glTF导入说明](docs/gltf导入说明.md)。
 新增PBR、节点动画、骨骼和方向光阴影示例见 [PBR动画与阴影使用说明](docs/PBR动画与阴影使用说明.md)；这不等于完整glTF扩展支持。
 四元数、路径规则与场景加载说明见 [文件资源与场景示例](docs/文件资源与场景示例.md)。
+可直接游玩的组件化物理小游戏见 [小游戏示例说明](docs/小游戏示例说明.md)，它使用角色组件、静态碰撞体、动作映射和CC0模型资源。
+音频系统的设备、资源、总线和AudioSourceComponent用法见 [音频系统说明](docs/音频系统说明.md)。
+游戏流程、关卡切换、Area事件、音乐/动画事件、粒子和存档的组合方式见 [游戏流程与系统扩展说明](docs/游戏流程与系统扩展说明.md)。
 
 ## 模块结构
 
 ```text
 src/
 ├── core/       # 应用运行层、帧时间、资源路径、统一日志
-├── animation/  # 动画片段、TRS采样、播放器、蒙皮矩阵
+├── game/       # 应用状态栈与状态切换策略
+├── ui/         # 面板、标签、按钮、焦点输入和轻量UI绘制
+├── audio/      # 音频设备、Clip、Voice、音乐淡入淡出和音频事件
 ├── assets/     # OBJ网格、Material文件与glTF模型的CPU解析
-├── animation/  # 动画片段、TRS采样、实例播放器、蒙皮矩阵
+├── animation/  # 动画片段、TRS采样、实例播放器、混合、事件和蒙皮矩阵
 ├── input/      # 键盘、鼠标及逐帧输入状态
 ├── math/       # 四元数旋转与父子变换
 ├── platform/   # 窗口和OpenGL上下文
-├── scene/      # 游戏对象、组件、对象所有权、场景管理和场景序列化
+├── scene/      # 游戏对象、组件、SceneManager和场景序列化
+├── particles/  # CPU粒子发射、生命周期和渐变数据
+├── save/       # 版本化游戏存档目录与场景封装
 ├── resources/  # Shader、Texture、Mesh、Material和Model缓存
 ├── physics/    # 碰撞形状、AABB/射线、静态碰撞世界、角色控制器、刚体
 └── graphics/
@@ -54,12 +61,20 @@ runtime/        # 各示例的可执行文件、资源和运行库
 - `primitive_shapes`：使用引擎内置创建接口生成平面、立方体、圆盘、球体、圆柱和圆锥，不手写顶点数据。
 - `scene_lighting`：场景级环境光、多方向光、点光源和聚光灯，演示光照与材质职责分离。
 - `physics_demo`：静态地形（地面、斜坡、陡坡、台阶）上的角色控制器、动态刚体球、射线放置方块和碰撞体可视化。按键与边界见[物理系统说明](docs/物理系统说明.md)。
+- `mini_game`：完整的“能量牛油果收集场”小游戏，演示GameObject组件、CharacterBody、固定物理步、静态障碍、动作映射、模型资源复用和示例层胜利/计时规则。
+- `ui_demo`：最小UI系统，演示面板、内置位图文字、按钮鼠标命中和Tab/Enter键盘焦点；应用可选配TTF/OTF字体。
+- `menu_demo`：MainMenu/Pause/Result状态和状态栈切换演示，ESC进入暂停，R进入结果。
+
+应用流程状态栈位于 `src/game/state/`，当前支持主状态、暂停状态、结算状态常用的 Push、Pop、Replace、Clear 和 Quit 操作；状态切换在安全边界提交，避免在回调中直接销毁当前状态。详细用法见[游戏状态管理说明](docs/游戏状态管理说明.md)。
+最小UI位于 `src/ui/`，Application会在Scene之后自动绘制非空的 `UiCanvas`；
+默认使用内置5×7字体，也可通过 `ApplicationConfig.uiFontPath` 启用UTF-8字体和字形图集；
+详细边界见[最小UI使用说明](docs/最小UI使用说明.md)。
 
 新增独立示例：`pbr_materials`（材质对照）、`gltf_pbr`（原版Avocado）、`node_animation`（刚体动画）、`skeletal_animation`（Rigged Figure双实例）、`directional_shadow`（主方向光投影）。
 
-物理系统的接口、运行方式、生命周期规则与明确边界见[物理系统说明](docs/物理系统说明.md)；阶段划分见[物理系统实施计划](docs/物理系统实施计划.md)。
+物理系统的接口、运行方式、生命周期规则与明确边界见[物理系统说明](docs/物理系统说明.md)。
 
-场景光照的接口、限制和测试见[场景光照说明](docs/场景光照说明.md)；阶段状态见[渲染与动画实施计划](docs/渲染与动画实施计划.md)。
+游戏状态、UI、SceneManager、Area、音频、粒子和存档的组合方式见[游戏流程与系统扩展说明](docs/游戏流程与系统扩展说明.md)。
 
 立方体材质设为 `CullMode::Back`，约定屏幕上逆时针绕序为正面、剔除背面。
 Scene渲染时会按每个Material配置深度测试、混合和剔除状态；三角形和纹理矩形默认不启用面剔除。
@@ -73,7 +88,7 @@ Scene渲染时会按每个Material配置深度测试、混合和剔除状态；�
 项目使用 MSYS2 UCRT64。安装编译器、CMake、Ninja 和图形依赖：
 
 ```bash
-pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-glfw mingw-w64-ucrt-x86_64-glew mingw-w64-ucrt-x86_64-glm mingw-w64-ucrt-x86_64-stb
+    pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-glfw mingw-w64-ucrt-x86_64-glew mingw-w64-ucrt-x86_64-glm mingw-w64-ucrt-x86_64-stb mingw-w64-ucrt-x86_64-miniaudio
 ```
 
 在项目根目录构建。推荐使用仓库内的Preset，它固定使用E盘MSYS2 UCRT64工具链，并把编译并发限制为1：
@@ -197,7 +212,7 @@ Application负责事件、时间、应用更新、Scene更新、清屏、绘制�
 - `update`：在Scene更新前调用，适合应用级逻辑及增删物体。
 - `afterRender`：绘制后、交换缓冲前调用，供像素读回等用途。
 
-回调全部可选，不需要继承基类。物体的运动仍注册到 `GameObject::setUpdateCallback`；不要再在回调里调用pollEvents、Scene::update或swapBuffers，避免一帧执行两次。
+回调全部可选，不需要继承基类。物体的新运动逻辑推荐注册到 `object.script().setUpdateCallback`；`GameObject::setUpdateCallback`仍保留为兼容入口。不要再在回调里调用pollEvents、Scene::update或swapBuffers，避免一帧执行两次。
 
 最小化或帧缓冲尺寸为零时暂停更新/绘制，并等待事件（最长50毫秒，事件到达可提前唤醒）。普通失焦不暂停；隐藏冒烟窗口只要尺寸有效也正常绘制。初始化完成后开始计时，首帧和暂停恢复首帧运动dt为0，普通dt默认最多0.1秒。
 
@@ -221,7 +236,7 @@ object.transform.position.x = 0.5f;
 const ObjectId objectId = object.id();
 
 // 回调保存应用自己的运动逻辑；Scene只决定更新顺序和active规则。
-object.setUpdateCallback([](GameObject &self, float deltaTime)
+object.script().setUpdateCallback([](GameObject &self, float deltaTime)
 {
     self.transform.rotateEuler({0.0f, deltaTime, 0.0f});
 });

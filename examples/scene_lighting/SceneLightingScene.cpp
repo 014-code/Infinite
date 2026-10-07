@@ -47,7 +47,7 @@ namespace SceneLightingExample
         auto &greenCylinder = application.scene().createCylinder(cylinder);
         greenCylinder.transform.position = {2.2f, 0.0f, 0.0f};
 
-        greenCylinder.setUpdateCallback([](GameObject &object, float deltaTime)
+        greenCylinder.script().setUpdateCallback([](GameObject &object, float deltaTime)
         {
             object.transform.rotateEuler({0.0f, deltaTime * 0.6f, 0.0f});
         });

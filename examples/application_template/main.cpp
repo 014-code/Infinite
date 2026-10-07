@@ -12,7 +12,8 @@ int main(int argc, char *argv[])
         //    推荐make_shared创建资源，通过setRenderable交给物体持有，不能借用这里的局部GPU对象。
         //    Application会在这个初始化回调返回后开始计时，不必自己创建Time。
 
-        // 2. 每帧逻辑：给物体注册setUpdateCallback，用传入的deltaTime控制运动。
+        // 2. 每帧逻辑：给物体的ScriptComponent注册更新回调，用deltaTime控制运动。
+        //    实际写法是object.script().setUpdateCallback(...);，脚本属于对象组件。
         //    不需要自己调用pollEvents、Scene::update、clear、render或swapBuffers。
 
         // 模板没有加载资源，也没有场景物体；显式标记未用参数，避免编译警告。

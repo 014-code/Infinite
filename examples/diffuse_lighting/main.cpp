@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
             // 刻意使用非均匀缩放，让示例同时覆盖法线逆转置变换。
             cube.transform.scale = {1.0f, 0.8f, 1.25f};
             cube.transform.setEulerAngles({0.25f, 0.35f, 0.0f});
-            cube.setUpdateCallback([](GameObject &object, float deltaTime)
+            cube.script().setUpdateCallback([](GameObject &object, float deltaTime)
             {
                 object.transform.rotateEuler({deltaTime * 0.25f, deltaTime * 0.5f, 0.0f});
             });

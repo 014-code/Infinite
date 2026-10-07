@@ -92,6 +92,11 @@ int PhysicsWorld::solverIterations() const noexcept
 
 int PhysicsWorld::step(float frameDeltaTime)
 {
+    return step(frameDeltaTime, FixedStepCallback{});
+}
+
+int PhysicsWorld::step(float frameDeltaTime, const FixedStepCallback &callback)
+{
     if (!std::isfinite(frameDeltaTime) || frameDeltaTime < 0.0f)
     {
         throw std::invalid_argument("Physics frame delta time must be non-negative and finite");
@@ -100,6 +105,10 @@ int PhysicsWorld::step(float frameDeltaTime)
     int steps = 0;
     while (accumulator_ >= fixedStep_ && steps < maximumSubSteps_)
     {
+        if (callback)
+        {
+            callback(fixedStep_);
+        }
         stepFixedOnce(fixedStep_);
         accumulator_ -= fixedStep_;
         ++steps;
@@ -246,14 +255,18 @@ bool PhysicsWorld::setBodyTransform(PhysicsBodyId id, const glm::vec3 &position,
     {
         return false;
     }
-    // 位姿校验在composeTransform内完成；这里只保存结果并刷新包围盒。
+    // 先完整校验新位姿，再写入Body。这样调用方传入NaN或非法四元数时，
+    // 不会出现“函数抛异常但旧碰撞体已经被部分改写”的半更新状态。
+    const glm::quat normalizedRotation = ShapeCollision::normalizedRotation(rotation);
+    ShapeCollision::composeTransform(position, normalizedRotation);
     body->position = position;
-    body->rotation = ShapeCollision::normalizedRotation(rotation);
+    body->rotation = normalizedRotation;
     if (body->dynamic)
     {
         // 瞬移后不保留旧速度与休眠状态，否则下一步会立刻把物体拉回去。
         body->velocity = glm::vec3(0.0f);
         body->angularVelocity = glm::vec3(0.0f);
+        body->force = glm::vec3(0.0f);
         body->sleeping = false;
         body->sleepTimer = 0.0f;
     }
@@ -407,6 +420,34 @@ bool PhysicsWorld::applyImpulse(PhysicsBodyId id, const glm::vec3 &impulse)
     body->velocity += impulse / body->settings.mass;
     body->sleeping = false;
     body->sleepTimer = 0.0f;
+    return true;
+}
+
+bool PhysicsWorld::applyForce(PhysicsBodyId id, const glm::vec3 &force)
+{
+    Body *body = find(id);
+    if (body == nullptr || !body->dynamic)
+    {
+        return false;
+    }
+    if (!isFinite(force))
+    {
+        throw std::invalid_argument("Force must be finite");
+    }
+    body->force += force;
+    body->sleeping = false;
+    body->sleepTimer = 0.0f;
+    return true;
+}
+
+bool PhysicsWorld::clearForces(PhysicsBodyId id)
+{
+    Body *body = find(id);
+    if (body == nullptr || !body->dynamic)
+    {
+        return false;
+    }
+    body->force = glm::vec3(0.0f);
     return true;
 }
 
@@ -599,9 +640,12 @@ void PhysicsWorld::stepFixedOnce(float stepSeconds)
         body->previousRotation = body->rotation;
         if (body->sleeping)
         {
+            body->force = glm::vec3(0.0f);
             continue;
         }
-        body->velocity += gravity_ * stepSeconds;
+        body->velocity += (gravity_ + body->force / body->settings.mass) * stepSeconds;
+        // 力是固定步级别的累加量，不会意外跨帧残留；需要持续施力的应用应每步重新调用。
+        body->force = glm::vec3(0.0f);
         body->velocity *= std::max(0.0f, 1.0f - body->settings.linearDamping * stepSeconds);
         body->angularVelocity *= std::max(0.0f, 1.0f - body->settings.angularDamping * stepSeconds);
         body->position += body->velocity * stepSeconds;

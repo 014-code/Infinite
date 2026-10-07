@@ -1,8 +1,7 @@
 // 物理系统示例：静态地形 + 角色控制器 + 动态刚体球 + 射线放置 + 碰撞体可视化。
 //
-// 本例把物理世界放在Application之外持有：PhysicsWorld必须比Scene活得更久，否则
-// Scene销毁时物体的PhysicsBodyComponent会向已销毁的世界注销句柄。main里的
-// shared_ptr在runExample返回（Application析构）之后才释放，满足这个顺序。
+// 物理世界由Application统一持有。Application的成员析构顺序保证Scene先注销组件，
+// 再销毁PhysicsWorld，示例不再需要自己维护一份shared_ptr和生命周期约定。
 #include "common/ExampleRun.h"
 #include "common/CameraRelativeInput.h"
 
@@ -53,10 +52,11 @@ namespace
 
     struct DemoState
     {
-        std::shared_ptr<PhysicsWorld> world;
-        CharacterController controller{CharacterSettings{0.35f, 1.0f}};
-        CharacterState character;
+        // 只借用Application中的物理世界；初始化回调执行后才赋值。
+        PhysicsWorld *world = nullptr;
         ObjectId characterVisual = 0;
+        // 跳跃边沿在渲染帧中采样，在固定步中只消费一次。
+        bool jumpRequested = false;
 
         std::vector<BallVisual> balls;
         std::vector<ObjectId> placedBoxes;
@@ -86,6 +86,12 @@ namespace
         material->setCullMode(CullMode::None);
         material->setBaseColor(color);
         return material;
+    }
+
+    glm::vec3 characterPosition(const Scene &scene, const DemoState &state)
+    {
+        const GameObject *character = scene.findObject(state.characterVisual);
+        return character == nullptr ? glm::vec3(0.0f) : character->transform.position;
     }
 
     // 静态地形：一块无限地面、一段可行走斜坡、一段陡坡、几级台阶和两个可被射线命中的方块。
@@ -161,7 +167,7 @@ namespace
     {
         const float offset = static_cast<float>(state.spawnCounter % 5) * 0.35f - 0.7f;
         ++state.spawnCounter;
-        const glm::vec3 position = state.character.position +
+        const glm::vec3 position = characterPosition(scene, state) +
             glm::vec3(glm::cos(state.cameraYaw) * 1.6f + offset, 2.5f, glm::sin(state.cameraYaw) * 1.6f);
 
         SphereOptions options;
@@ -174,8 +180,9 @@ namespace
         RigidBodySettings settings;
         settings.restitution = 0.45f;
         settings.friction = 0.4f;
-        const PhysicsBodyId body = state.world->createDynamicBody(CollisionShape(SphereShape(BALL_RADIUS)),
-            position, settings, state.propFilter);
+        ball.setDynamicPhysicsBody(*state.world, CollisionShape(SphereShape(BALL_RADIUS)), settings,
+            state.propFilter);
+        const PhysicsBodyId body = ball.physicsBody().bodyId();
         // 给一点自转与初速度，让示例看起来不像"垂直落下的小球"。
         state.world->setBodyAngularVelocity(body, glm::vec3(1.5f, 0.0f, -2.0f));
         state.world->setBodyVelocity(body, glm::vec3(offset * 2.0f, 0.0f, 0.0f));
@@ -203,7 +210,7 @@ namespace
         const glm::vec3 forward = glm::normalize(glm::vec3(std::cos(state.cameraYaw) * std::cos(state.cameraPitch),
             std::sin(state.cameraPitch),
             std::sin(state.cameraYaw) * std::cos(state.cameraPitch)));
-        const glm::vec3 origin = state.character.position + glm::vec3(0.0f, 1.0f, 0.0f) + forward * 0.5f;
+        const glm::vec3 origin = characterPosition(scene, state) + glm::vec3(0.0f, 1.0f, 0.0f) + forward * 0.5f;
         const Ray ray(origin, forward);
         const auto hit = state.world->raycast(ray, 60.0f);
         if (!hit)
@@ -312,7 +319,7 @@ namespace
         LOG_INFO("debug collider overlay rebuilt: " + std::to_string(state.debugVisuals.size()) + " shapes");
     }
 
-    void updateCharacter(Application &application, DemoState &state, float deltaTime)
+    void updateCharacterFixed(Application &application, DemoState &state, float deltaTime)
     {
         if (deltaTime <= 0.0f)
         {
@@ -320,10 +327,17 @@ namespace
         }
         const Input &input = application.input();
         const Camera &camera = application.camera();
+        GameObject *characterObject = application.scene().findObject(state.characterVisual);
+        if (characterObject == nullptr || !characterObject->characterBody().isAttached())
+        {
+            return;
+        }
+        CharacterBodyComponent &characterBody = characterObject->characterBody();
+        CharacterState &character = characterBody.state();
 
         // 摄像机相对移动：W/S沿视线，D/A沿屏幕右方。
         // 方向约定集中在cameraRelativeDirection里并单独测试，避免再次出现左右颠倒。
-        const glm::vec3 toTarget = state.character.position + glm::vec3(0.0f, 0.6f, 0.0f) - camera.position();
+        const glm::vec3 toTarget = character.position + glm::vec3(0.0f, 0.6f, 0.0f) - camera.position();
 
         const float forwardInput = float(input.isKeyDown(Key::W)) - float(input.isKeyDown(Key::S));
         const float rightInput = float(input.isKeyDown(Key::D)) - float(input.isKeyDown(Key::A));
@@ -331,28 +345,30 @@ namespace
         const float speed = (input.isKeyDown(Key::LeftShift) || input.isKeyDown(Key::RightShift))
             ? CHARACTER_SPRINT
             : CHARACTER_SPEED;
-        state.character.velocity.x = 0.0f;
-        state.character.velocity.z = 0.0f;
+        character.velocity.x = 0.0f;
+        character.velocity.z = 0.0f;
         if (glm::length(direction) > 0.0f)
         {
             direction = glm::normalize(direction);
-            state.character.velocity.x = direction.x * speed;
-            state.character.velocity.z = direction.z * speed;
+            character.velocity.x = direction.x * speed;
+            character.velocity.z = direction.z * speed;
             state.characterYaw = std::atan2(direction.x, direction.z);
         }
 
         // 重力与跳跃由示例决定，控制器只负责碰撞与着地判定。
-        state.character.velocity.y += state.world->gravity().y * deltaTime;
-        if (state.character.grounded && state.character.velocity.y <= 0.0f)
+        character.velocity.y += state.world->gravity().y * deltaTime;
+        if (character.grounded && character.velocity.y <= 0.0f)
         {
-            state.character.velocity.y = -1.0f; // 轻微下压，保证下坡时贴地而不是漂浮。
+            character.velocity.y = -1.0f; // 轻微下压，保证下坡时贴地而不是漂浮。
         }
-        if (input.wasKeyPressed(Key::Space) && state.character.grounded)
+        if (state.jumpRequested && character.grounded)
         {
-            state.character.velocity.y = CHARACTER_JUMP_SPEED;
+            character.velocity.y = CHARACTER_JUMP_SPEED;
         }
+        // 无论本次是否处于地面，都只消费一次本帧跳跃边沿，避免多个固定子步重复触发。
+        state.jumpRequested = false;
 
-        state.character = state.controller.move(*state.world, state.character, deltaTime, state.characterMask);
+        characterBody.move(deltaTime);
     }
 
     void updateCamera(Application &application, DemoState &state, float deltaTime)
@@ -376,7 +392,7 @@ namespace
         }
         (void)deltaTime;
 
-        const glm::vec3 target = state.character.position + glm::vec3(0.0f, 0.6f, 0.0f);
+        const glm::vec3 target = characterPosition(application.scene(), state) + glm::vec3(0.0f, 0.6f, 0.0f);
         const float horizontal = std::cos(state.cameraPitch);
         const glm::vec3 offset(std::cos(state.cameraYaw) * horizontal, std::sin(state.cameraPitch),
             std::sin(state.cameraYaw) * horizontal);
@@ -388,25 +404,11 @@ namespace
         // 角色：圆柱可视物体直接跟随控制器给出的胶囊中心。
         if (GameObject *character = scene.findObject(state.characterVisual))
         {
-            character->transform.position = state.character.position;
             character->transform.setRotation(glm::quat(glm::vec3(0.0f, state.characterYaw, 0.0f)));
         }
 
-        // 动态球：用插值状态渲染，消除固定步长与渲染帧率不一致时的台阶感。
-        const float alpha = state.world->interpolationAlpha();
-        for (BallVisual &ball : state.balls)
-        {
-            GameObject *object = scene.findObject(ball.object);
-            const auto interpolated = state.world->interpolatedBodyState(ball.body, alpha);
-            if (object == nullptr || !interpolated)
-            {
-                continue;
-            }
-            object->transform.position = interpolated->position;
-            object->transform.setRotation(interpolated->rotation);
-        }
-
-        // 调试叠加：动态体的形状会移动，每帧同步位姿；平面保持固定高度。
+        // 动态球的Transform由Scene统一从PhysicsBodyComponent同步；这里只处理尚未组件化的
+        // 角色控制器和调试叠加，避免示例重新复制一套刚体同步逻辑。
         const PhysicsWorld &world = *state.world;
         for (const DebugVisual &visual : state.debugVisuals)
         {
@@ -429,17 +431,15 @@ namespace
 
 int main(int argc, char *argv[])
 {
-    // PhysicsWorld必须在Application之前创建、之后销毁：Scene里的物体借用了它。
-    auto world = std::make_shared<PhysicsWorld>();
+    // 物理世界由Application统一管理，Scene中的物理组件会在应用结束时自动注销。
     auto state = std::make_shared<DemoState>();
-    state->world = world;
-    state->character.position = glm::vec3(0.0f, 2.5f, 0.0f);
 
     return runExample(argc, argv, "physics_demo", "physics_demo | WASD 移动 Space 跳 右键拖拽转视角 E 生成球 R 射线放盒子 P 调试碰撞体 C 清空",
         glm::vec4(0.06f, 0.07f, 0.10f, 1.0f),
         [state](Application &application, const std::filesystem::path &)
         {
             Scene &scene = application.scene();
+            state->world = &application.physicsWorld();
             scene.lighting().mainLight().direction = glm::vec3(-0.4f, -1.0f, -0.35f);
             scene.lighting().mainLight().intensity = 1.15f;
             scene.lighting().ambient() = glm::vec3(0.28f);
@@ -449,11 +449,12 @@ int main(int argc, char *argv[])
             CylinderOptions characterOptions;
             characterOptions.name = "character";
             characterOptions.color = glm::vec4(0.35f, 0.65f, 0.95f, 1.0f);
-            characterOptions.radius = state->controller.settings().radius;
-            characterOptions.height = state->controller.settings().cylinderHeight +
-                state->controller.settings().radius * 2.0f;
+            const CharacterSettings characterSettings{0.35f, 1.0f};
+            characterOptions.radius = characterSettings.radius;
+            characterOptions.height = characterSettings.cylinderHeight + characterSettings.radius * 2.0f;
             GameObject &character = scene.createCylinder(characterOptions);
-            character.transform.position = state->character.position;
+            character.transform.position = glm::vec3(0.0f, 2.5f, 0.0f);
+            character.setCharacterBody(*state->world, characterSettings, state->characterMask);
             state->characterVisual = character.id();
 
             LOG_INFO("physics_demo ready: WASD move, Space jump, E spawn ball, R place box, P debug shapes");
@@ -464,8 +465,9 @@ int main(int argc, char *argv[])
             Scene &scene = application.scene();
             const Input &input = application.input();
 
-            updateCharacter(application, *state, deltaTime);
             updateCamera(application, *state, deltaTime);
+            // 如果本帧还没有固定子步，先保留跳跃边沿，避免高帧率下输入被吞掉。
+            state->jumpRequested = state->jumpRequested || input.wasKeyPressed(Key::Space);
 
             if (input.wasKeyPressed(Key::E))
             {
@@ -511,8 +513,13 @@ int main(int argc, char *argv[])
                 }
             }
 
-            // 固定步长推进：world内部按1/60累加，最多补跑4步。
-            state->world->step(deltaTime);
-            syncVisuals(scene, *state);
+        },
+        [state](Application &application, float fixedDeltaTime)
+        {
+            updateCharacterFixed(application, *state, fixedDeltaTime);
+        },
+        [state](Application &application, float)
+        {
+            syncVisuals(application.scene(), *state);
         });
 }

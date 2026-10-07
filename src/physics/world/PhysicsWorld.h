@@ -1,5 +1,6 @@
 #pragma once
 
+#include "physics/body/PhysicsBodyId.h"
 #include "physics/body/PhysicsFilter.h"
 #include "physics/body/RigidBody.h"
 #include "physics/math/Aabb.h"
@@ -14,15 +15,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-// 碰撞体句柄：从1开始递增，0无效，删除后不复用；规则与Scene的对象ID一致。
-using PhysicsBodyId = std::uint32_t;
 
 // 物理世界：登记碰撞体、按固定步长推进动态体、提供同步碰撞查询。
 //
@@ -37,6 +36,11 @@ using PhysicsBodyId = std::uint32_t;
 class PhysicsWorld
 {
 public:
+    // 固定子步回调只负责更新外部物理驱动逻辑，例如CharacterController。
+    // 回调在每个固定步开始前执行，传入的时间始终等于fixedStep()。
+    // PhysicsWorld不保存回调，避免把应用对象的生命周期带入物理模块。
+    using FixedStepCallback = std::function<void(float)>;
+
     PhysicsWorld();
     PhysicsWorld(const PhysicsWorld &) = delete;
     PhysicsWorld &operator=(const PhysicsWorld &) = delete;
@@ -56,6 +60,9 @@ public:
     // 累加frameDeltaTime并推进固定步长，返回实际执行的步数。
     // 单帧需要补跑的步数超过上限时丢弃多余时间，避免卡顿后的"螺旋失控"。
     int step(float frameDeltaTime);
+    // 与上面的接口相同，但在每个固定子步开始前调用callback。
+    // callback抛出的异常会直接传回调用方，当前子步不会被标记为已完成。
+    int step(float frameDeltaTime, const FixedStepCallback &callback);
     // 丢弃累加器中不足一步的剩余时间；瞬移或重置后使用。
     void resetAccumulator();
     // 渲染插值系数：0表示上一步位姿，1表示当前步位姿。
@@ -100,6 +107,9 @@ public:
     std::optional<RigidBodyState> interpolatedBodyState(PhysicsBodyId id, float alpha) const;
     bool setBodyVelocity(PhysicsBodyId id, const glm::vec3 &velocity);
     bool setBodyAngularVelocity(PhysicsBodyId id, const glm::vec3 &angularVelocity);
+    // 施加持续到下一固定步的力；固定步结束后自动清零，适合每帧/每步重新施力。
+    bool applyForce(PhysicsBodyId id, const glm::vec3 &force);
+    bool clearForces(PhysicsBodyId id);
     // 施加冲量并唤醒；零冲量只唤醒不改变速度。
     bool applyImpulse(PhysicsBodyId id, const glm::vec3 &impulse);
     bool wakeBody(PhysicsBodyId id);
@@ -150,6 +160,7 @@ private:
         glm::quat previousRotation{1.0f, 0.0f, 0.0f, 0.0f};
         glm::vec3 velocity{0.0f};
         glm::vec3 angularVelocity{0.0f};
+        glm::vec3 force{0.0f};
         bool sleeping = false;
         float sleepTimer = 0.0f;
         std::optional<Aabb> worldAabb; // 平面体没有有限包围盒。

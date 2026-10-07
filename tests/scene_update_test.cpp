@@ -11,12 +11,19 @@ int main()
         Scene scene;
         auto &first = scene.createObject("first");
         auto &second = scene.createObject("second");
+        require(first.script().owner() == &first, "Script component owner is wrong");
+        require(first.renderable().owner() == &first, "Renderable component owner is wrong");
+        require(first.physicsBody().owner() == &first, "Physics component owner is wrong");
+        require(first.characterBody().owner() == &first, "Character component owner is wrong");
         std::vector<ObjectId> order;
-        first.setUpdateCallback([&](GameObject &object, float dt)
+        // 直接通过组件注册第一份逻辑，确认行为已经由ScriptComponent持有。
+        first.script().setUpdateCallback([&](GameObject &object, float dt)
         {
             object.transform.position.x += dt;
             order.push_back(object.id());
         });
+        require(first.script().hasUpdateCallback(), "Script component did not store callback");
+        // 第二个对象继续使用兼容入口，保证旧示例代码无需立即全部迁移。
         second.setUpdateCallback([&](GameObject &object, float) { order.push_back(object.id()); });
         scene.update(0.25f);
         require(order == std::vector<ObjectId>{first.id(), second.id()}, "Wrong update order");

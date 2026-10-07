@@ -124,7 +124,9 @@ inline int runExample(int argc, char *argv[], const char *name, const char *titl
     const glm::vec4 &clearColor,
     const std::function<void(Application &, const std::filesystem::path &)> &initialize,
     ExampleFrameContent content = ExampleFrameContent::DrawnScene,
-    const std::function<void(Application &, float)> &update = {})
+    const std::function<void(Application &, float)> &update = {},
+    const std::function<void(Application &, float)> &fixedUpdate = {},
+    const std::function<void(Application &, float)> &afterPhysics = {})
 {
     try
     {
@@ -147,6 +149,8 @@ inline int runExample(int argc, char *argv[], const char *name, const char *titl
             initialize(app, directory);
         };
         callbacks.update = update;
+        callbacks.fixedUpdate = fixedUpdate;
+        callbacks.afterPhysics = afterPhysics;
         application.run(callbacks);
         LOG_INFO(std::string(name) + " example stopped");
         return 0;

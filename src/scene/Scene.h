@@ -15,6 +15,7 @@ class SceneSerializer;
 class ModelInstantiator;
 class PrimitiveResources;
 class ResourceManager;
+class PhysicsWorld;
 struct DirectionalLight;
 
 // Scene拥有物体；物体可以借用资源，也可以通过shared_ptr共享持有资源。仅在主线程操作。
@@ -59,6 +60,19 @@ public:
     // 更新中禁止create/remove/clear及重入；结构变更应在update返回后执行。
     // 回调异常传回应用入口，已更新物体的变更不会回滚。
     void update(float deltaTime);
+
+    // 在PhysicsWorld每个固定子步开始前同步静态碰撞体。
+    // 静态体的权威数据是GameObject的Transform，应用修改Transform后无需再手动逐个调用组件。
+    void syncStaticPhysics(PhysicsWorld &world);
+    // 在所有固定子步完成后，把动态刚体的插值位姿写回对应GameObject。
+    // 动态体的权威数据是PhysicsWorld，应用如需瞬移应调用物理世界的位姿接口。
+    void syncDynamicPhysics(PhysicsWorld &world, float interpolationAlpha);
+    // 固定步完成后把角色组件的状态写回GameObject位置；角色朝向仍由应用层控制。
+    void syncCharacterPhysics();
+    // 固定物理步完成后更新所有Area并派发bodyEntered/bodyExited事件。
+    void updateAreas();
+    // 将带空间化音源的组件位置同步到AudioSystem；不负责创建或播放声音。
+    void syncAudio();
 
     // 收集一次本帧快照供阴影/颜色通道共用。资源和Transform仍是借用，消费前不得增删场景。
     // 有蒙皮的对象同时解析关节ID并计算矩阵；删除关节会在任何绘制前报错。

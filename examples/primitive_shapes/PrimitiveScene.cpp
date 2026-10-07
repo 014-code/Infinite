@@ -64,11 +64,11 @@ namespace PrimitiveExample
         disk.transform.setEulerAngles({glm::half_pi<float>(), 0.0f, 0.0f});
 
         // 旋转几个物体，让运行时能同时观察圆周分段、法线和深度遮挡。
-        cylinder.setUpdateCallback([](GameObject &object, float deltaTime)
+        cylinder.script().setUpdateCallback([](GameObject &object, float deltaTime)
         {
             object.transform.rotateEuler({0.0f, deltaTime * 0.55f, 0.0f});
         });
-        cone.setUpdateCallback([](GameObject &object, float deltaTime)
+        cone.script().setUpdateCallback([](GameObject &object, float deltaTime)
         {
             object.transform.rotateEuler({0.0f, -deltaTime * 0.35f, 0.0f});
         });

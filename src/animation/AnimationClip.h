@@ -8,6 +8,14 @@
 enum class AnimationPath { Translation, Rotation, Scale };
 enum class AnimationInterpolation { Step, Linear };
 
+// 动画事件是时间轴上的轻量标记，不携带音频、粒子等具体系统指针。
+// 应用通过AnimationPlayer的回调决定收到事件后执行什么规则。
+struct AnimationEvent
+{
+    double time = 0.0;
+    std::string name;
+};
+
 // 通道只绑定模型内的节点索引，不保存场景指针或节点名称。
 // values的位置/缩放使用xyz，旋转使用xyzw；times单位为秒，必须严格递增。
 struct AnimationChannel
@@ -24,12 +32,15 @@ struct AnimationChannel
 class AnimationClip final
 {
 public:
-    AnimationClip(std::string name, std::vector<AnimationChannel> channels);
+    AnimationClip(std::string name, std::vector<AnimationChannel> channels,
+        std::vector<AnimationEvent> events = {});
     const std::string &name() const noexcept { return name_; }
     const std::vector<AnimationChannel> &channels() const noexcept { return channels_; }
+    const std::vector<AnimationEvent> &events() const noexcept { return events_; }
     float duration() const noexcept { return duration_; }
 private:
     std::string name_;
     std::vector<AnimationChannel> channels_;
+    std::vector<AnimationEvent> events_;
     float duration_ = 0;
 };

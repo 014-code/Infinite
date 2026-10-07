@@ -71,7 +71,7 @@ endforeach()
 # 实际启动全部示例及空白模板，隐藏窗口绘制三帧并检查像素。
 # 使用已有示例目标，不调用测试helper重新配置示例；运行目录特意不同于资源源码目录。
 foreach(EXAMPLE_NAME IN ITEMS color_triangle textured_quad diffuse_lighting player_controller textured_cube
-    alpha_blending scene_objects asset_scene gltf_model application_template material_showcase primitive_shapes scene_lighting pbr_materials gltf_pbr node_animation skeletal_animation directional_shadow physics_demo)
+    alpha_blending scene_objects asset_scene gltf_model application_template ui_demo menu_demo material_showcase primitive_shapes scene_lighting pbr_materials gltf_pbr node_animation skeletal_animation directional_shadow physics_demo mini_game)
     add_test(NAME infinite_example_${EXAMPLE_NAME}_smoke
         COMMAND $<TARGET_FILE:infinite_example_${EXAMPLE_NAME}> --smoke-test)
     set_tests_properties(infinite_example_${EXAMPLE_NAME}_smoke PROPERTIES
@@ -87,7 +87,8 @@ configure_engine_test(infinite_resource_manager_test)
 
 foreach(MODULE_TEST IN ITEMS scene_lighting_render_test primitive_scene_test primitive_mesh_test lighting_test
     player_controller_test transform_test scene_test scene_render_test scene_update_test input_state_test
-    camera_test camera_controller_test input_action_test window_test frame_timing_test application_test)
+    camera_test camera_controller_test input_action_test window_test frame_timing_test application_test
+    application_state_test ui_test scene_manager_test area_event_test particle_system_test save_game_test)
     add_executable(infinite_${MODULE_TEST} tests/${MODULE_TEST}.cpp)
     # 平地移动属于示例，只有对应示例和测试编译它，引擎库不反向依赖examples。
     if(MODULE_TEST STREQUAL "player_controller_test")
@@ -96,6 +97,12 @@ foreach(MODULE_TEST IN ITEMS scene_lighting_render_test primitive_scene_test pri
     target_include_directories(infinite_${MODULE_TEST} PRIVATE examples)
     configure_engine_test(infinite_${MODULE_TEST})
 endforeach()
+
+# 音频核心支持Null Backend，因此可以在没有声卡或音频设备的环境中纯CPU测试。
+add_executable(infinite_audio_test tests/audio_test.cpp)
+configure_engine_test(infinite_audio_test)
+add_executable(infinite_ui_font_test tests/ui_font_test.cpp)
+configure_engine_test(infinite_ui_font_test)
 
 add_executable(infinite_mesh_loader_test tests/mesh_loader_test.cpp)
 configure_engine_test(infinite_mesh_loader_test ARGS "${CMAKE_CURRENT_BINARY_DIR}/tests/meshes")
@@ -181,4 +188,6 @@ set_tests_properties(
     infinite_physics_collision_test infinite_physics_world_test infinite_physics_body_component_test
     infinite_physics_character_test infinite_physics_rigidbody_test
     infinite_camera_relative_input_test
+    infinite_audio_test infinite_ui_test infinite_scene_manager_test infinite_area_event_test infinite_particle_system_test infinite_save_game_test
+    infinite_ui_font_test
     PROPERTIES LABELS "cpu")

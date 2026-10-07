@@ -38,6 +38,16 @@ int main()
         expectThrow<std::invalid_argument>([&] { AnimationClip("bad", {bad}); }, "Duplicate time accepted");
         bad = position; bad.values[0].x = std::numeric_limits<float>::infinity();
         expectThrow<std::invalid_argument>([&] { AnimationClip("bad", {bad}); }, "Nonfinite value accepted");
+
+        AnimationEvent later{0.8, "footstep"};
+        AnimationEvent earlier{0.2, "start"};
+        AnimationClip eventClip("events", {position}, {later, earlier});
+        require(eventClip.events().size() == 2 && eventClip.events()[0].name == "start" &&
+            eventClip.events()[1].name == "footstep", "Animation events were not sorted");
+        expectThrow<std::invalid_argument>([&]
+        {
+            AnimationClip("bad event", {position}, {{4.0, "too late"}});
+        }, "Out-of-range animation event accepted");
         expectThrow<std::invalid_argument>([&] { AnimationSampler::sample(linear, -1, rest); }, "Negative time accepted");
         expectThrow<std::out_of_range>([&] { AnimationSampler::sample(linear, 1, {}); }, "Missing pose node accepted");
 

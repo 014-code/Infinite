@@ -7,8 +7,9 @@
 #include <stdexcept>
 #include <utility>
 
-AnimationClip::AnimationClip(std::string name, std::vector<AnimationChannel> channels)
-    : name_(std::move(name)), channels_(std::move(channels))
+AnimationClip::AnimationClip(std::string name, std::vector<AnimationChannel> channels,
+    std::vector<AnimationEvent> events)
+    : name_(std::move(name)), channels_(std::move(channels)), events_(std::move(events))
 {
     std::set<std::pair<std::size_t, AnimationPath>> targets;
     for (auto &channel : channels_)
@@ -43,4 +44,17 @@ AnimationClip::AnimationClip(std::string name, std::vector<AnimationChannel> cha
         }
         duration_ = std::max(duration_, channel.times.back());
     }
+    for (const auto &event : events_)
+    {
+        if (!std::isfinite(event.time) || event.time < 0.0 ||
+            event.time > static_cast<double>(duration_) || event.name.empty())
+        {
+            throw std::invalid_argument("Animation events must have a valid time and name");
+        }
+    }
+    std::stable_sort(events_.begin(), events_.end(),
+        [](const AnimationEvent &left, const AnimationEvent &right)
+        {
+            return left.time < right.time;
+        });
 }

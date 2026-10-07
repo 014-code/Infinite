@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
         object.setRenderable(quad, material);
         object.transform.scale = glm::vec3(2.0f);
         const auto &input = application.input();
-        object.setUpdateCallback([&input](GameObject &self, float deltaTime)
+        object.script().setUpdateCallback([&input](GameObject &self, float deltaTime)
         {
             // 根据按键和帧间隔移动纹理矩形；dt已由Application处理暂停和大幅卡顿。
             const float movementSpeed = 1.0f;

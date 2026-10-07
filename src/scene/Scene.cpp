@@ -2,6 +2,7 @@
 
 #include "graphics/rendering/Renderer.h"
 #include "graphics/lighting/Lighting.h"
+#include "physics/world/PhysicsWorld.h"
 #include "SkinBinding.h"
 
 #include <algorithm>
@@ -94,16 +95,13 @@ void Scene::update(float deltaTime)
     updating_ = true;
     try
     {
-        // 使用创建顺序更新，保证同一场景每帧行为稳定。对象可以在回调中
+        // 使用创建顺序更新，保证同一场景每帧行为稳定。脚本组件可以在回调中
         // 修改自己的Transform和回调，但Scene结构变化要等本次遍历结束。
         for (const auto &object : objects_)
         {
-            if (object->isActive() && object->updateCallback_)
+            if (object->isActive() && object->script().hasUpdateCallback())
             {
-                // 临时持有正在执行的函数，回调替换/清空自身注册时也不会提前销毁。
-                // 不复制函数本体，否则mutable lambda内部的计数等状态每帧都会丢失。
-                const auto callback = object->updateCallback_;
-                (*callback)(*object, deltaTime);
+                object->script().update(*object, deltaTime);
             }
         }
     }
@@ -113,6 +111,66 @@ void Scene::update(float deltaTime)
         throw;
     }
     updating_ = false;
+}
+
+void Scene::syncStaticPhysics(PhysicsWorld &world)
+{
+    for (const auto &object : objects_)
+    {
+        if (object->physicsBody().belongsTo(world) && !object->physicsBody().isDynamic())
+        {
+            object->physicsBody().syncFromTransform(object->transform);
+        }
+    }
+}
+
+void Scene::syncDynamicPhysics(PhysicsWorld &world, float interpolationAlpha)
+{
+    for (const auto &object : objects_)
+    {
+        if (object->physicsBody().belongsTo(world) && object->physicsBody().isDynamic())
+        {
+            object->physicsBody().syncToTransform(object->transform, interpolationAlpha);
+        }
+    }
+}
+
+void Scene::syncCharacterPhysics()
+{
+    for (const auto &object : objects_)
+    {
+        if (object->characterBody().isAttached())
+        {
+            object->characterBody().syncToTransform(object->transform);
+        }
+    }
+}
+
+void Scene::updateAreas()
+{
+    for (const auto &object : objects_)
+    {
+        if (!object->isActive())
+        {
+            object->area().clearOverlaps();
+            continue;
+        }
+        if (object->area().isAttached())
+        {
+            object->area().poll(object->transform);
+        }
+    }
+}
+
+void Scene::syncAudio()
+{
+    for (const auto &object : objects_)
+    {
+        if (object->isActive())
+        {
+            object->audioSource().syncTransform(object->transform);
+        }
+    }
 }
 
 void Scene::render(Renderer &renderer, const Camera &camera, float aspectRatio) const

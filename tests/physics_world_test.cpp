@@ -90,6 +90,14 @@ int main()
         require(world.setBodyTransform(groundId, glm::vec3(0.0f), NO_ROTATION), "Restoring the body failed");
         require(world.raycast(fromAbove).has_value(), "Restored plane was not hit");
 
+        // 非法位姿必须在写入前被拒绝，不能留下只更新了一半的Body状态。
+        const glm::vec3 invalidPosition(std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f);
+        expectThrow<std::invalid_argument>([&] {
+            world.setBodyTransform(groundId, invalidPosition, NO_ROTATION); },
+            "NaN body position was accepted");
+        requireVecNear(*world.bodyPosition(groundId), glm::vec3(0.0f),
+            "Failed body transform update changed the old position");
+
         // 重叠查询：命中盒体并返回接触信息。地面是无限平面，抬高查询球到墙顶高度后只应命中墙体。
         const PhysicsBodyId wallId = world.createStaticBody(box, glm::vec3(0.0f, 0.0f, 0.0f));
         const auto overlaps = world.overlapShape(CollisionShape(SphereShape(0.5f)), glm::vec3(1.2f, 1.0f, 0.0f),

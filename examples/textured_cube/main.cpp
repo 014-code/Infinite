@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
         // 深度测试仍然保留，用来解决可见片段之间的前后遮挡。
         material->setCullMode(CullMode::Back);
         // 这里使用正缩放；单轴负缩放会翻转绕序，不能直接沿用原来的正面约定。
-        object.setUpdateCallback([](GameObject &self, float deltaTime)
+        object.script().setUpdateCallback([](GameObject &self, float deltaTime)
         {
             // 旋转立方体，便于观察不同面的前后关系。
             // 用模拟dt累加旋转，恢复窗口时不会根据真实经过时间突然跳转角度。

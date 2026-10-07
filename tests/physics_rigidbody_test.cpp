@@ -43,6 +43,18 @@ int main()
         expectThrow<std::invalid_argument>([&] { world.setSolverIterations(0); }, "Zero solver iterations accepted");
         expectThrow<std::invalid_argument>([&] { world.step(-0.5f); }, "Negative frame delta was accepted");
 
+        // 固定步回调：一帧补跑多个子步时，每次回调都收到相同的固定dt。
+        {
+            int callbackCount = 0;
+            world.step(STEP * 2.0f, [&](float fixedDeltaTime)
+            {
+                ++callbackCount;
+                requireNear(fixedDeltaTime, world.fixedStep(), 0.000001f,
+                    "Fixed callback received a variable delta time");
+            });
+            require(callbackCount == 2, "Fixed callback count does not match simulated steps");
+        }
+
         // 自由落体：无碰撞、无阻尼时速度与位移符合运动学。
         {
             PhysicsWorld fallWorld;
@@ -194,6 +206,26 @@ int main()
             expectThrow<std::invalid_argument>([&] {
                 sleepWorld.setBodyVelocity(body, glm::vec3(std::numeric_limits<float>::quiet_NaN())); },
                 "NaN velocity was accepted");
+        }
+
+        // 力在固定步中按F=ma积分，并在该步结束后清零；第二步不应重复施加。
+        {
+            PhysicsWorld forceWorld;
+            forceWorld.setGravity(glm::vec3(0.0f));
+            RigidBodySettings settings;
+            settings.linearDamping = 0.0f;
+            settings.allowSleep = false;
+            const PhysicsBodyId body = forceWorld.createDynamicBody(sphere, glm::vec3(0.0f), settings);
+            require(forceWorld.applyForce(body, glm::vec3(6.0f, 0.0f, 0.0f)),
+                "Applying a force failed");
+            forceWorld.step(STEP);
+            const float firstVelocity = forceWorld.bodyState(body)->velocity.x;
+            forceWorld.step(STEP);
+            const float secondVelocity = forceWorld.bodyState(body)->velocity.x;
+            requireNear(firstVelocity, 6.0f * STEP, 0.0001f, "Force integration is wrong");
+            requireNear(secondVelocity, firstVelocity, 0.0001f, "Force was not cleared after a step");
+            require(!forceWorld.applyForce(999, glm::vec3(1.0f)),
+                "Invalid force target reported success");
         }
 
         // 渲染插值：系数0取上一步位姿，1取当前位姿，中间值位于两者之间。

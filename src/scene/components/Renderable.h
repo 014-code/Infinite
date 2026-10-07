@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/vec3.hpp>
+#include "scene/components/Component.h"
 #include "graphics/geometry/primitives/PrimitiveTypes.h"
 
 #include <memory>
@@ -19,10 +20,12 @@ struct SkinBinding;
 // 或更新逻辑。Mesh是几何数据，Material是表面状态，两者在这里组合成一次可绘制配置。
 // 组件本身可以借用外部资源，也可以通过shared_ptr持有资源，规则与原有GameObject
 // 的setRenderable接口保持一致。
-class Renderable final
+class Renderable final : public Component
 {
 public:
     Renderable() = default;
+    explicit Renderable(GameObject &owner) noexcept : Component(owner) {}
+    ~Renderable() override = default;
     Renderable(const Renderable &) = delete;
     Renderable &operator=(const Renderable &) = delete;
     Renderable(Renderable &&) = delete;

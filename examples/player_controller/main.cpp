@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
             light.intensity = 0.8f;
             light.ambient = {0.18f, 0.18f, 0.18f};
             // 移动状态必须跨帧存在，用shared_ptr随角色回调持有；不保存输入对象的借用指针。
-            player.setUpdateCallback([movement, bindings, &application](GameObject &object, float deltaTime)
+            player.script().setUpdateCallback([movement, bindings, &application](GameObject &object, float deltaTime)
             {
                 if (application.window().isFocused() && application.input().wasKeyPressed(Key::R))
                 {

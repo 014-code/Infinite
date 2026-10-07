@@ -10,6 +10,8 @@ CMakeUserPresets.json
 # 构建产物与旧版可执行文件，体积大且可由构建重新生成。
 /runtime/examples/
 /runtime/_legacy/
+# Debug/Release 隔离运行目录只用于本机测试，不属于源码提交。
+/runtime-component-*/
 # 设计草稿与本机工具数据，不属于仓库内容。
 # 文档默认不入库：只放行面向使用者的说明，计划类草稿保留在本地。
 /docs/*
@@ -19,6 +21,10 @@ CMakeUserPresets.json
 !/docs/渲染接口约定.md
 !/docs/应用运行层使用说明.md
 !/docs/物理系统说明.md
+!/docs/音频系统说明.md
+!/docs/游戏状态管理说明.md
+!/docs/最小UI使用说明.md
+!/docs/游戏流程与系统扩展说明.md
 /.workbuddy/
 # IDE 工程目录与工具数据。
 /.idea/

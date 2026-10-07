@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
         application.scene().findObject(second.rootId)->transform.scale = {-0.85f, 0.85f, 0.85f};
 
         // 模型资源共享，两个根节点只保存各自实例的Transform。
-        application.scene().findObject(first.rootId)->setUpdateCallback(
+        application.scene().findObject(first.rootId)->script().setUpdateCallback(
             [](GameObject &object, float deltaTime)
             {
                 object.transform.rotate(glm::angleAxis(deltaTime * 0.35f, glm::vec3(0, 1, 0)));

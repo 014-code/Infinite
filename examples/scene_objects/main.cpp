@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 
         // 回调只捕获存活更久的Input；回调内不增删对象，active同时控制更新与绘制。
         // WASD交给摄像机，方向键继续移动暖色立方体，两个控制不会抢同一组按键。
-        left.setUpdateCallback([&input](GameObject &object, float deltaTime)
+        left.script().setUpdateCallback([&input](GameObject &object, float deltaTime)
         {
             // 具体运动属于应用逻辑；Scene没有内置“移动立方体”的特殊行为。
             glm::vec2 direction(0.0f);
@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
             }
             object.transform.rotateEuler(glm::vec3(deltaTime * 0.5f, deltaTime, 0.0f));
         });
-        right.setUpdateCallback([](GameObject &object, float deltaTime)
+        right.script().setUpdateCallback([](GameObject &object, float deltaTime)
         {
             object.transform.rotateEuler(glm::vec3(deltaTime * 0.7f, -deltaTime, 0.0f));
         });

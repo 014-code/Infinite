@@ -31,13 +31,13 @@ int main(int argc, char *argv[])
         }
 
         // 文件只保存数据，不序列化C++函数。加载返回的ID用来重新绑定应用行为。
-        parent.setUpdateCallback([](GameObject &object, float deltaTime)
+        parent.script().setUpdateCallback([](GameObject &object, float deltaTime)
         {
             // angleAxis用“角度（弧度）+单位轴”构造增量四元数，rotate在局部空间累积。
             // 父节点转动时，子节点的位置也跟随旋转，形成绕大立方体运动的效果。
             object.transform.rotate(glm::angleAxis(deltaTime * 0.55f, glm::vec3(0, 1, 0)));
         });
-        child.setUpdateCallback([](GameObject &object, float deltaTime)
+        child.script().setUpdateCallback([](GameObject &object, float deltaTime)
         {
             // 子节点还可独立自转；世界矩阵会组合父节点和它自己的局部变换。
             object.transform.rotate(glm::angleAxis(deltaTime, glm::vec3(1, 0, 0)));

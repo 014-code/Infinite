@@ -12,8 +12,19 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_path(STB_IMAGE_INCLUDE_DIR NAMES stb/stb_image.h REQUIRED)
+find_path(STB_TRUETYPE_INCLUDE_DIR NAMES stb/stb_truetype.h REQUIRED)
+find_path(MINIAUDIO_INCLUDE_DIR NAMES miniaudio/miniaudio.h REQUIRED)
+find_library(MINIAUDIO_LIBRARY NAMES miniaudio REQUIRED)
 
 set(ENGINE_SOURCES
+    src/audio/AudioSystem.cpp
+    src/audio/MusicPlayer.cpp
+    src/audio/AudioEvent.cpp
+    src/game/menu/MenuState.cpp
+    src/game/menu/MenuStates.cpp
+    src/particles/ParticleSystem.cpp
+    src/save/SaveGame.cpp
+    src/game/state/ApplicationStateStack.cpp
     src/physics/math/Aabb.cpp
     src/physics/math/Ray.cpp
     src/physics/math/Raycast.cpp
@@ -62,8 +73,24 @@ set(ENGINE_SOURCES
     src/input/InputState.cpp
     src/input/ActionMap.cpp
     src/math/Transform.cpp
+    src/ui/UiElement.cpp
+    src/ui/UiButton.cpp
+    src/ui/UiCanvas.cpp
+    src/ui/font/Utf8.cpp
+    src/ui/font/FontFile.cpp
+    src/ui/font/FontCollection.cpp
+    src/ui/font/BuiltinFont.cpp
+    src/ui/font/FontAtlas.cpp
+    src/ui/text/TextLayout.cpp
+    src/ui/UiRenderer.cpp
     src/scene/GameObject.cpp
+    src/scene/components/AreaComponent.cpp
+    src/scene/components/CharacterBodyComponent.cpp
+    src/scene/components/AudioSourceComponent.cpp
+    src/scene/components/PhysicsTransformRules.cpp
+    src/scene/components/ScriptComponent.cpp
     src/scene/Scene.cpp
+    src/scene/SceneManager.cpp
     src/scene/SceneSerializer.cpp
     src/scene/ModelInstantiator.cpp
     src/scene/components/Renderable.cpp
@@ -104,6 +131,8 @@ target_include_directories(infinite_engine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/
 include(cmake/PbrShaders.cmake)
 # stb只在实现文件中使用，不成为引擎公开头文件的依赖。
 target_include_directories(infinite_engine SYSTEM PRIVATE ${STB_IMAGE_INCLUDE_DIR})
+target_include_directories(infinite_engine SYSTEM PRIVATE ${STB_TRUETYPE_INCLUDE_DIR})
+target_include_directories(infinite_engine SYSTEM PRIVATE ${MINIAUDIO_INCLUDE_DIR})
 target_include_directories(infinite_engine SYSTEM PRIVATE third_party/cgltf)
 install(FILES third_party/cgltf/cgltf.h third_party/cgltf/README.md DESTINATION third-party-licenses/cgltf)
 target_compile_options(infinite_engine PRIVATE -Wall -Wextra)
@@ -112,6 +141,7 @@ target_link_libraries(infinite_engine PUBLIC
     GLEW::GLEW
     glm::glm
     OpenGL::GL
+    ${MINIAUDIO_LIBRARY}
 )
 
 set(RUNTIME_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/runtime" CACHE PATH "Example runtime output root")
@@ -119,7 +149,7 @@ get_filename_component(MINGW_BIN_DIRECTORY "${CMAKE_CXX_COMPILER}" DIRECTORY)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/交付运行说明.md" DESTINATION ".")
 # 附带本机MSYS2提供的第三方许可文件；这并不替代项目自身的发布授权检查。
 if(MINGW)
-    foreach(DEPENDENCY IN ITEMS gcc libgcc libstdc++ libwinpthread glfw glew glm stb)
+    foreach(DEPENDENCY IN ITEMS gcc libgcc libstdc++ libwinpthread glfw glew glm stb miniaudio)
         set(LICENSE_DIRECTORY "${MINGW_BIN_DIRECTORY}/../share/licenses/${DEPENDENCY}")
         if(EXISTS "${LICENSE_DIRECTORY}")
             install(DIRECTORY "${LICENSE_DIRECTORY}" DESTINATION "third-party-licenses")
@@ -262,6 +292,18 @@ target_compile_options(infinite_example_application_template PRIVATE -Wall -Wext
 target_link_libraries(infinite_example_application_template PRIVATE infinite_engine)
 configure_engine_example(infinite_example_application_template application_template)
 
+add_executable(infinite_example_ui_demo examples/ui_demo/main.cpp)
+target_include_directories(infinite_example_ui_demo PRIVATE examples)
+target_compile_options(infinite_example_ui_demo PRIVATE -Wall -Wextra)
+target_link_libraries(infinite_example_ui_demo PRIVATE infinite_engine)
+configure_engine_example(infinite_example_ui_demo ui_demo)
+
+add_executable(infinite_example_menu_demo examples/menu_demo/main.cpp)
+target_include_directories(infinite_example_menu_demo PRIVATE examples)
+target_compile_options(infinite_example_menu_demo PRIVATE -Wall -Wextra)
+target_link_libraries(infinite_example_menu_demo PRIVATE infinite_engine)
+configure_engine_example(infinite_example_menu_demo menu_demo)
+
 # 材质展示示例：真实CC0 glTF模型、方向光和模型资源全部属于应用层示例。
 add_executable(infinite_example_material_showcase
     examples/material_showcase/main.cpp
@@ -325,6 +367,17 @@ target_include_directories(infinite_example_physics_demo PRIVATE examples)
 target_compile_options(infinite_example_physics_demo PRIVATE -Wall -Wextra)
 target_link_libraries(infinite_example_physics_demo PRIVATE infinite_engine)
 configure_engine_example(infinite_example_physics_demo physics_demo)
+
+# 小游戏示例：使用GameObject组件、CharacterBody和静态碰撞体完成一个可运行的收集玩法。
+# 模型、Shader和胜利规则全部属于应用层，不把具体游戏规则加入引擎库。
+add_executable(infinite_example_mini_game
+    examples/mini_game/main.cpp
+    examples/mini_game/MiniGameScene.cpp
+)
+target_include_directories(infinite_example_mini_game PRIVATE examples)
+target_compile_options(infinite_example_mini_game PRIVATE -Wall -Wextra)
+target_link_libraries(infinite_example_mini_game PRIVATE infinite_engine)
+configure_engine_example(infinite_example_mini_game mini_game)
 
 if(BUILD_TESTING)
     include(cmake/EngineTests.cmake)

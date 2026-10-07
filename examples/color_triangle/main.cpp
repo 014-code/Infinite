@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
         // 场景共享持有资源；初始化回调返回后，局部shared_ptr销毁也不影响物体绘制。
         object.setRenderable(triangle, material);
         const auto &input = application.input();
-        object.setUpdateCallback([&input](GameObject &self, float deltaTime)
+        object.script().setUpdateCallback([&input](GameObject &self, float deltaTime)
         {
             // 根据按键和帧间隔移动三角形。归一化后斜向移动不会比直线移动更快。
             const float movementSpeed = 1.0f;
