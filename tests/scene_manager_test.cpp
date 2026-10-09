@@ -44,12 +44,28 @@ int main()
         require(manager.commitPending(), "Pending scene was not committed");
         require(manager.currentName() == "game" && scene.objectCount() == 2,
             "Pending scene transition failed");
+        // menu已消耗ID 1，staging切换会继续使用下一个ID，因此Player为2。
+        GameObject *const existingObject = scene.findObject(2);
+        require(existingObject != nullptr, "Loaded scene object was not indexed");
 
         bool failed = false;
         try { manager.load("broken"); }
         catch (const std::runtime_error &) { failed = true; }
-        require(failed && manager.currentName().empty() && scene.objectCount() == 0,
-            "Failed scene load left a partial scene");
+        require(failed && manager.currentName() == "game" && scene.objectCount() == 2,
+            "Failed scene load did not preserve the current scene");
+        require(scene.findObject(2) == existingObject && scene.findObject(2)->name() == "Player",
+            "Failed scene load replaced an existing object");
+
+        manager.requestLoad("broken");
+        bool pendingFailed = false;
+        try { manager.commitPending(); }
+        catch (const std::runtime_error &) { pendingFailed = true; }
+        require(pendingFailed && manager.hasPendingLoad() && manager.currentName() == "game" &&
+                scene.objectCount() == 2,
+            "Failed pending scene load was not retryable");
+        manager.requestLoad("menu");
+        require(manager.commitPending() && manager.currentName() == "menu" && scene.objectCount() == 1,
+            "Pending scene recovery did not commit a later request");
 
         manager.unload();
         require(scene.objectCount() == 0 && manager.currentName().empty(),

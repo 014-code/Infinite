@@ -83,6 +83,7 @@ namespace
             Application app(testConfig());
             app.window().setVSyncEnabled(false);
             std::vector<std::string> order;
+            bool eventsProcessed = false;
             int renders = 0;
             ApplicationCallbacks callbacks;
             callbacks.initialize = [&](Application &application)
@@ -98,11 +99,18 @@ namespace
             callbacks.onEvents = [&](Application &)
             {
                 order.push_back("events");
+                eventsProcessed = true;
                 // 通过已注册的GLFW回调馈入输入，验证Application确实在更新前收集/刷新输入。
                 auto *handle = glfwGetCurrentContext();
                 const auto key = glfwSetKeyCallback(handle, nullptr);
                 glfwSetKeyCallback(handle, key);
                 key(handle, GLFW_KEY_W, 0, renders == 0 ? GLFW_PRESS : GLFW_RELEASE, 0);
+            };
+            callbacks.framePolicy = [&](Application &)
+            {
+                require(eventsProcessed, "Frame policy was read before event processing");
+                eventsProcessed = false;
+                return StateFramePolicy{};
             };
             callbacks.update = [&](Application &application, float deltaTime)
             {

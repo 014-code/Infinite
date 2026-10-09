@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
+#include <cstdint>
 #include <vector>
 
 class Transform
@@ -67,4 +68,23 @@ private:
     glm::quat rotation_{1.0f, 0.0f, 0.0f, 0.0f};
     Transform *parent_ = nullptr;
     std::vector<Transform *> children_;
+
+    // position和scale为了兼容旧代码保持公开，因此不能只依赖setter做失效通知。
+    // 下面的快照用于检测直接字段修改；缓存本身是mutable，因为worldMatrix()是只读查询。
+    void refreshLocalCache() const;
+    void bumpRevision() const noexcept;
+
+    mutable bool localCacheValid_ = false;
+    mutable glm::vec3 cachedPosition_{0.0f};
+    mutable glm::vec3 cachedScale_{1.0f};
+    mutable glm::quat cachedRotation_{1.0f, 0.0f, 0.0f, 0.0f};
+    mutable glm::mat4 localCache_{1.0f};
+    mutable std::uint64_t localRevision_ = 0;
+
+    mutable bool worldCacheValid_ = false;
+    mutable const Transform *cachedParent_ = nullptr;
+    mutable std::uint64_t cachedParentWorldRevision_ = 0;
+    mutable std::uint64_t cachedWorldLocalRevision_ = 0;
+    mutable glm::mat4 worldCache_{1.0f};
+    mutable std::uint64_t worldRevision_ = 0;
 };

@@ -16,12 +16,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <list>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+class PhysicsQueries;
+class PhysicsSolver;
 
 // 物理世界：登记碰撞体、按固定步长推进动态体、提供同步碰撞查询。
 //
@@ -142,6 +146,9 @@ public:
     std::vector<std::pair<PhysicsBodyId, PhysicsBodyId>> broadphasePairs() const;
 
 private:
+    friend class PhysicsQueries;
+    friend class PhysicsSolver;
+
     struct Body
     {
         // CollisionShape没有默认构造，因此Body也只在创建时一次性构造。
@@ -166,37 +173,18 @@ private:
         std::optional<Aabb> worldAabb; // 平面体没有有限包围盒。
     };
 
-    // 一次接触：a为动态体，b可能是动态体或静态体（index为npos表示静态）。
-    struct Contact
-    {
-        std::size_t a = 0;
-        std::size_t b = 0;
-        glm::vec3 point{0.0f};
-        glm::vec3 normal{0.0f}; // 把a沿该方向推开可分离。
-        float penetration = 0.0f;
-        float restitution = 0.0f;
-        float friction = 0.0f;
-    };
-
-    static constexpr std::size_t NO_BODY = std::numeric_limits<std::size_t>::max();
-
     Body *find(PhysicsBodyId id);
     const Body *find(PhysicsBodyId id) const;
     void refreshWorldAabb(Body &body);
-    void stepFixedOnce(float stepSeconds);
-    // 扫掠剪枝候选对（按bodies_下标输出，已应用包围盒与层/掩码过滤）。
-    // 公开的broadphasePairs()与step的接触收集共用这一份实现，避免两套规则漂移。
-    void collectSweepCandidates(std::vector<std::pair<std::size_t, std::size_t>> &candidates) const;
-    void collectContacts(std::vector<Contact> &contacts) const;
-    void buildContact(std::size_t indexA, std::size_t indexB, std::vector<Contact> &contacts) const;
-    void solveVelocity(std::vector<Contact> &contacts);
-    void correctPositions(std::vector<Contact> &contacts);
-    // 删除体后下标会移动，需要重建id到下标的映射。
-    void rebuildIndex();
 
     std::vector<std::unique_ptr<Body>> bodies_;
-    // id到下标的映射：让find与所有按id的访问都是O(1)。增删时同步维护。
+    // id到连续数组下标的映射：让find与所有按id的访问都是O(1)。
+    // 删除时使用swap-and-pop，不再为了修复后续下标重建整张表。
     std::unordered_map<PhysicsBodyId, std::size_t> indexById_;
+    // 求解器使用连续数组，公开bodyIds仍按注册顺序返回，因此顺序单独保存。
+    // list节点地址稳定，删除中间刚体不需要移动其他注册记录。
+    std::list<PhysicsBodyId> registrationOrder_;
+    std::unordered_map<PhysicsBodyId, std::list<PhysicsBodyId>::iterator> orderById_;
     PhysicsBodyId nextId_ = 1;
     glm::vec3 gravity_{0.0f, -9.81f, 0.0f};
     float fixedStep_ = 1.0f / 60.0f;

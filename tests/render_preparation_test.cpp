@@ -43,6 +43,10 @@ int main()
         // 只测准备和提交路径，关闭光栅化以减少像素填充影响；像素正确性由其他回归测试负责。
         glEnable(GL_RASTERIZER_DISCARD);
         renderer.drawItems(items, camera, 1);
+        require(renderer.lastStats().drawCalls == items.size() &&
+                renderer.lastStats().opaqueItems == 64 &&
+                renderer.lastStats().transparentItems == 64,
+            "Render queue statistics do not match submitted items");
         std::cout << "Cold batch driver uniform queries: " << probe.calls() << '\n';
         std::array<double, 5> samples;
         probe.reset();

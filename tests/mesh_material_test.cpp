@@ -116,6 +116,16 @@ int main(int argc, char *argv[])
         require(material.texture() == nullptr && material.baseColor().r == 1, "Material getters wrong");
         expectThrow<std::invalid_argument>([&] { material.setBaseColor({1, 1, 1, -1}); }, "Invalid alpha accepted");
 
+        // 材质实例只复制表面参数，底层Shader/Texture仍可共享；修改副本不能污染原材质。
+        auto materialInstance = material.clone();
+        materialInstance->setBaseColor({0, 0, 1, 1});
+        materialInstance->setRenderMode(RenderMode::AlphaBlend);
+        require(material.baseColor().r == 1 && material.baseColor().b == 0 &&
+                material.renderMode() == RenderMode::Opaque,
+            "Material clone changed the shared source");
+        require(&materialInstance->shader() == &material.shader(),
+            "Material clone did not share the Shader resource");
+
         Scene scene;
         std::weak_ptr<Mesh> meshLifetime;
         std::weak_ptr<Material> materialLifetime;

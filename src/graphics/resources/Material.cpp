@@ -67,6 +67,13 @@ void Material::use() const
     }
 }
 
+std::shared_ptr<Material> Material::clone() const
+{
+    // 默认复制会保留ownedShader_/ownedTexture_等shared_ptr，因而只共享底层GPU资源；
+    // baseColor、渲染模式和PBR配置属于Material自身，会在副本中独立保存。
+    return std::make_shared<Material>(*this);
+}
+
 void Material::setBaseColor(const glm::vec4 &baseColor)
 {
     for (int component = 0; component < 4; ++component)

@@ -2,6 +2,8 @@
 
 #include "graphics/rendering/RenderItem.h"
 
+#include <cstddef>
+
 class Mesh;
 class Material;
 class Camera;
@@ -9,6 +11,18 @@ class Transform;
 struct DirectionalLight;
 class SceneLighting;
 struct DirectionalShadowView;
+
+// Renderer只统计本次drawItems调用实际提交的绘制，便于示例和性能测试观察批次变化。
+// 这些数据是诊断信息，不参与渲染结果，也不代表GPU已经完成执行。
+struct RenderStats
+{
+    std::size_t drawCalls = 0;
+    std::size_t shaderChanges = 0;
+    std::size_t materialChanges = 0;
+    std::size_t meshChanges = 0;
+    std::size_t opaqueItems = 0;
+    std::size_t transparentItems = 0;
+};
 
 class Renderer
 {
@@ -27,6 +41,9 @@ public:
     void drawItems(const std::vector<RenderItem> &items, const Camera &camera,
         float aspectRatio, const SceneLighting &lighting, const DirectionalShadowView *shadow = nullptr,
         bool requireLinearOutput = false) const;
+
+    // 返回最近一次drawItems的统计快照；调用者只能读取，不应把它当成同步GPU计时结果。
+    const RenderStats &lastStats() const noexcept { return lastStats_; }
 
     // 清空颜色和深度缓冲。临时开启深度写入以完成清理，随后恢复原写入开关。
     void clear(float red, float green, float blue, float alpha) const;
@@ -66,4 +83,7 @@ public:
 
     void draw(const Mesh &mesh, const Material &material, const Transform &transform,
         const Camera &camera, float aspectRatio, const SceneLighting &lighting) const;
+
+private:
+    mutable RenderStats lastStats_;
 };

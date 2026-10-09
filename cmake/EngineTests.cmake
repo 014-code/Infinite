@@ -71,7 +71,7 @@ endforeach()
 # 实际启动全部示例及空白模板，隐藏窗口绘制三帧并检查像素。
 # 使用已有示例目标，不调用测试helper重新配置示例；运行目录特意不同于资源源码目录。
 foreach(EXAMPLE_NAME IN ITEMS color_triangle textured_quad diffuse_lighting player_controller textured_cube
-    alpha_blending scene_objects asset_scene gltf_model application_template ui_demo menu_demo material_showcase primitive_shapes scene_lighting pbr_materials gltf_pbr node_animation skeletal_animation directional_shadow physics_demo mini_game)
+    alpha_blending scene_objects asset_scene gltf_model application_template ui_demo menu_demo game_flow material_showcase primitive_shapes scene_lighting pbr_materials gltf_pbr node_animation skeletal_animation directional_shadow physics_demo mini_game)
     add_test(NAME infinite_example_${EXAMPLE_NAME}_smoke
         COMMAND $<TARGET_FILE:infinite_example_${EXAMPLE_NAME}> --smoke-test)
     set_tests_properties(infinite_example_${EXAMPLE_NAME}_smoke PROPERTIES

@@ -7,6 +7,7 @@
 #include "graphics/rendering/RenderItem.h"
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 class Renderer;
@@ -17,6 +18,16 @@ class PrimitiveResources;
 class ResourceManager;
 class PhysicsWorld;
 struct DirectionalLight;
+class SceneManager;
+namespace scene_serialization_detail
+{
+    class SceneFileWriter;
+    class SceneBuilder;
+}
+class SceneAudioSync;
+class ScenePhysicsSync;
+class SceneRenderCollector;
+class SceneSystem;
 
 // Scene拥有物体；物体可以借用资源，也可以通过shared_ptr共享持有资源。仅在主线程操作。
 // 应用应先销毁Scene，再销毁资源，最后销毁提供OpenGL上下文的Window。
@@ -61,6 +72,12 @@ public:
     // 回调异常传回应用入口，已更新物体的变更不会回滚。
     void update(float deltaTime);
 
+    // 注册一个借用的场景级系统。Scene不负责系统的销毁；系统地址在注销前必须保持稳定。
+    // 系统在所有GameObject脚本之后按注册顺序更新，适合实现跨物体的应用规则。
+    void registerSystem(SceneSystem &system);
+    // 返回是否找到并移除系统；更新过程中调用会抛出logic_error。
+    bool unregisterSystem(SceneSystem &system);
+
     // 在PhysicsWorld每个固定子步开始前同步静态碰撞体。
     // 静态体的权威数据是GameObject的Transform，应用修改Transform后无需再手动逐个调用组件。
     void syncStaticPhysics(PhysicsWorld &world);
@@ -89,13 +106,29 @@ public:
 
 private:
     friend class SceneSerializer;
+    friend class SceneManager;
+    friend class scene_serialization_detail::SceneFileWriter;
+    friend class scene_serialization_detail::SceneBuilder;
     friend class ModelInstantiator;
+    friend class SceneAudioSync;
+    friend class ScenePhysicsSync;
+    friend class SceneRenderCollector;
 
     // vector移动的是智能指针，实际GameObject单独分配，因此扩容不会改变物体地址。
     std::vector<std::unique_ptr<GameObject>> objects_;
+    // 这里只保存借用指针，不拥有GameObject；所有增删路径必须与objects_同步更新。
+    // 这样按ID查找不需要每次扫描整个场景，Model/脚本/序列化恢复大量对象时更稳定。
+    std::unordered_map<ObjectId, GameObject *> objectIndex_;
     ObjectId nextId_ = 1;
     bool updating_ = false;
+    // 只借用外部系统，不参与Scene复制、清空或关卡对象的所有权管理。
+    std::vector<SceneSystem *> systems_;
     SceneLighting lighting_;
     PrimitiveResources *primitiveResources_ = nullptr;
     ResourceManager *fileResources_ = nullptr;
+
+    // SceneManager加载新关卡时使用：staging只继承服务绑定和光照配置，不复制旧物体。
+    void prepareStaging(Scene &staging) const;
+    // 只有staging完全构建成功后才调用，交换后旧物体由临时Scene负责析构。
+    void replaceContents(Scene &staging);
 };

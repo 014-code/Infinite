@@ -18,6 +18,11 @@ find_library(MINIAUDIO_LIBRARY NAMES miniaudio REQUIRED)
 
 set(ENGINE_SOURCES
     src/audio/AudioSystem.cpp
+    src/audio/internal/AudioValidation.cpp
+    src/audio/internal/AudioDeviceBackend.cpp
+    src/audio/internal/AudioClipCache.cpp
+    src/audio/internal/AudioMixerState.cpp
+    src/audio/internal/AudioVoicePool.cpp
     src/audio/MusicPlayer.cpp
     src/audio/AudioEvent.cpp
     src/game/menu/MenuState.cpp
@@ -32,6 +37,8 @@ set(ENGINE_SOURCES
     src/physics/shapes/CollisionShape.cpp
     src/physics/world/ShapeCollision.cpp
     src/physics/world/PhysicsWorld.cpp
+    src/physics/world/PhysicsQueries.cpp
+    src/physics/world/PhysicsSolver.cpp
     src/physics/character/CharacterController.cpp
     src/graphics/shaders/SkinShaderSource.cpp
     src/graphics/lighting/DirectionalShadowSettings.cpp
@@ -55,6 +62,9 @@ set(ENGINE_SOURCES
     src/scene/ScenePrimitives.cpp
     src/scene/serialization/PrimitiveSerialization.cpp
     src/scene/serialization/PendingSceneFile.cpp
+    src/scene/serialization/SceneFileReader.cpp
+    src/scene/serialization/SceneFileWriter.cpp
+    src/scene/serialization/SceneBuilder.cpp
     src/graphics/geometry/primitives/PrimitiveMeshBuilder.cpp
     src/assets/GltfLoader.cpp
     src/assets/gltf/GltfFileReader.cpp
@@ -90,6 +100,9 @@ set(ENGINE_SOURCES
     src/scene/components/PhysicsTransformRules.cpp
     src/scene/components/ScriptComponent.cpp
     src/scene/Scene.cpp
+    src/scene/systems/SceneAudioSync.cpp
+    src/scene/systems/ScenePhysicsSync.cpp
+    src/scene/systems/SceneRenderCollector.cpp
     src/scene/SceneManager.cpp
     src/scene/SceneSerializer.cpp
     src/scene/ModelInstantiator.cpp
@@ -303,6 +316,16 @@ target_include_directories(infinite_example_menu_demo PRIVATE examples)
 target_compile_options(infinite_example_menu_demo PRIVATE -Wall -Wextra)
 target_link_libraries(infinite_example_menu_demo PRIVATE infinite_engine)
 configure_engine_example(infinite_example_menu_demo menu_demo)
+
+# 游戏流程示例：组合状态栈、SceneManager、Area事件和SaveGame，不把具体规则加入引擎层。
+add_executable(infinite_example_game_flow
+    examples/game_flow/main.cpp
+    examples/game_flow/GameFlow.cpp
+)
+target_include_directories(infinite_example_game_flow PRIVATE examples)
+target_compile_options(infinite_example_game_flow PRIVATE -Wall -Wextra)
+target_link_libraries(infinite_example_game_flow PRIVATE infinite_engine)
+configure_engine_example(infinite_example_game_flow game_flow)
 
 # 材质展示示例：真实CC0 glTF模型、方向光和模型资源全部属于应用层示例。
 add_executable(infinite_example_material_showcase

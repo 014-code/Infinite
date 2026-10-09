@@ -200,6 +200,9 @@ int main()
             const PhysicsBodyId added = mapWorld.createStaticBody(sphere, glm::vec3(30.0f, 0.0f, 0.0f));
             requireVecNear(*mapWorld.bodyPosition(added), glm::vec3(30.0f, 0.0f, 0.0f),
                 "Body added after erase is unreachable");
+            const auto ids = mapWorld.bodyIds();
+            require(ids == std::vector<PhysicsBodyId>{firstBody, lastBody, added},
+                "Body registration order changed after swap-and-pop removal");
             require(mapWorld.bodyCount() == 3, "Body count after erase and add is wrong");
         }
 

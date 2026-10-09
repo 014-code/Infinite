@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 
 namespace
 {
@@ -179,6 +180,7 @@ void Renderer::drawItems(const std::vector<RenderItem> &items, const Camera &cam
     float aspectRatio, const SceneLighting &lighting, const DirectionalShadowView *shadow,
     bool requireLinearOutput) const
 {
+    lastStats_ = {};
     const LightingUniforms prepared(lighting);
     if (shadow)
     {
@@ -241,12 +243,41 @@ void Renderer::drawItems(const std::vector<RenderItem> &items, const Camera &cam
     // 所有校验和排序在修改OpenGL状态之前完成；不改变Scene的存储顺序。
     std::stable_sort(transparent.begin(), transparent.end(),
         [](const PreparedDraw &left, const PreparedDraw &right) { return left.depth < right.depth; });
+    // 不透明物体不依赖绘制顺序解决可见性，可以按GPU状态分组，减少Shader和材质切换。
+    // 使用指针地址作为稳定的资源标识；std::less保证不同对象指针比较满足严格弱序。
+    std::stable_sort(opaque.begin(), opaque.end(), [](const PreparedDraw &left, const PreparedDraw &right)
+    {
+        const std::less<const Shader *> lessShader;
+        if (&left.material->shader() != &right.material->shader())
+        {
+            return lessShader(&left.material->shader(), &right.material->shader());
+        }
+        if (left.material != right.material)
+        {
+            return std::less<const Material *>{}(left.material, right.material);
+        }
+        return std::less<const Mesh *>{}(left.mesh, right.mesh);
+    });
+    lastStats_.opaqueItems = opaque.size();
+    lastStats_.transparentItems = transparent.size();
+
+    const Shader *previousShader = nullptr;
+    const Material *previousMaterial = nullptr;
+    const Mesh *previousMesh = nullptr;
     const RenderState savedState;
     setDepthTestEnabled(true);
     setDepthWriteEnabled(true);
     setAlphaBlendingEnabled(false);
     const auto drawItem = [&](const PreparedDraw &item)
     {
+        const Shader *shader = &item.material->shader();
+        if (shader != previousShader) { ++lastStats_.shaderChanges; }
+        if (item.material != previousMaterial) { ++lastStats_.materialChanges; }
+        if (item.mesh != previousMesh) { ++lastStats_.meshChanges; }
+        previousShader = shader;
+        previousMaterial = item.material;
+        previousMesh = item.mesh;
+        ++lastStats_.drawCalls;
         setFaceCullingEnabled(item.material->cullMode() == CullMode::Back);
         if (item.material->correctMirroredWinding())
         {

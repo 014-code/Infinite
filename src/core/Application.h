@@ -117,6 +117,19 @@ public:
     std::optional<DirectionalShadowSettings> &directionalShadow() { return config_.directionalShadow; }
 
 private:
+    // 处理一帧开始阶段的窗口和输入事件，并在所有可能影响场景的事件完成后
+    // 读取本帧策略。返回false表示窗口已经请求关闭，主循环应立即结束。
+    bool processEvents(const ApplicationCallbacks &callbacks, bool paused,
+        StateFramePolicy &policy);
+    // 推进一帧的游戏逻辑、固定物理子步、场景服务和音频服务。
+    // 物理同步顺序在这里集中维护，避免主循环和其他入口产生不同的模拟规则。
+    void updateFrame(const ApplicationCallbacks &callbacks,
+        const StateFramePolicy &policy, float deltaTime);
+    // 根据当前策略绘制场景和UI，并在最后检查OpenGL错误、交换窗口缓冲区。
+    // framebufferSize由主循环在事件阶段后读取，确保本帧渲染使用最新尺寸。
+    void renderFrame(const ApplicationCallbacks &callbacks,
+        const StateFramePolicy &policy, const glm::ivec2 &framebufferSize);
+
     // C++成员按声明顺序构造、逆序销毁：先释放Scene持有的GPU资源，最后关闭Window。
     // 配置和时间参数先校验，非法配置不会创建窗口。
     ApplicationConfig config_;

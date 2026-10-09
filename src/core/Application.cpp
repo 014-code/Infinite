@@ -62,33 +62,8 @@ void Application::run(const ApplicationCallbacks &callbacks)
         bool paused = false;
         while (!window_.shouldClose())
         {
-            // 暂停时等待事件而不是忙循环。每轮只收集一次事件，避免清掉刚收到的输入边沿。
-            if (paused)
-            {
-                window_.waitEvents(0.05);
-            }
-            else
-            {
-                window_.pollEvents();
-            }
-            if (window_.shouldClose())
-            {
-                break;
-            }
-
-            const StateFramePolicy policy = callbacks.framePolicy
-                ? callbacks.framePolicy(*this)
-                : StateFramePolicy{};
-            if (callbacks.onEvents)
-            {
-                callbacks.onEvents(*this);
-            }
-            // UI在应用事件回调之后处理本帧输入，按钮回调可以安全地请求状态切换；
-            // 状态切换本身仍由ApplicationStateStack在下一帧安全边界提交。
-            ui_.processInput(input_.inputState(), glm::vec2(window_.size()));
-            // 关卡切换只在事件阶段提交，避免清空Scene时仍处于Scene::update遍历中。
-            sceneManager_.commitPending();
-            if (window_.shouldClose())
+            StateFramePolicy policy;
+            if (!processEvents(callbacks, paused, policy))
             {
                 break;
             }
@@ -103,121 +78,173 @@ void Application::run(const ApplicationCallbacks &callbacks)
             }
 
             const float deltaTime = timing_.frame().deltaTime;
-            if (callbacks.update)
-            {
-                callbacks.update(*this, deltaTime);
-            }
-            if (window_.shouldClose())
-            {
-                break;
-            }
-            float interpolationAlpha = 0.0f;
-            if (policy.simulatePhysics)
-            {
-                physicsWorld_.step(deltaTime, [&](float fixedDeltaTime)
-                {
-                    // 静态碰撞体先读取本帧应用逻辑写入的Transform。
-                    scene_.syncStaticPhysics(physicsWorld_);
-                    if (callbacks.fixedUpdate)
-                    {
-                        callbacks.fixedUpdate(*this, fixedDeltaTime);
-                    }
-                    // fixedUpdate可能移动了静态物体，再同步一次确保本子步看到最新位姿。
-                    scene_.syncStaticPhysics(physicsWorld_);
-                });
-                interpolationAlpha = physicsWorld_.interpolationAlpha();
-                scene_.syncDynamicPhysics(physicsWorld_, interpolationAlpha);
-                scene_.syncCharacterPhysics();
-                scene_.updateAreas();
-                if (callbacks.afterPhysics)
-                {
-                    callbacks.afterPhysics(*this, interpolationAlpha);
-                }
-            }
-            else
-            {
-                // 暂停期间不保留旧的半步时间，恢复后从新的帧边界继续模拟。
-                physicsWorld_.resetAccumulator();
-            }
-            if (policy.updateScene)
-            {
-                scene_.update(deltaTime);
-            }
-            scene_.syncAudio();
-            // 音频状态在Scene更新后推进，保证后续接入AudioSourceComponent时
-            // 能够读取到本帧最新的Transform；音频不参与固定物理子步。
-            if (policy.updateAudio)
-            {
-                audioEvents_.dispatch(audio_, music_);
-                music_.update(deltaTime);
-                audio_.update(deltaTime);
-            }
+            updateFrame(callbacks, policy, deltaTime);
             if (window_.shouldClose())
             {
                 break;
             }
 
-            // 清屏同时重置颜色和深度；Scene先画不透明组，再处理透明排序和状态恢复。
-            const auto &color = config_.clearColor;
-            const auto items = policy.renderScene ? scene_.renderItems() : std::vector<RenderItem>{};
-            std::optional<DirectionalShadowView> shadow;
-            if (config_.directionalShadow)
-            {
-                if (!config_.linearHdr) { throw std::invalid_argument("Directional shadows require linear HDR/PBR"); }
-                shadow = shadowMap_.render(items,scene_.lighting().mainLight().direction,*config_.directionalShadow);
-            }
-            if (config_.linearHdr)
-            {
-                hdrPipeline_.render(size.x, size.y, color, [&]
-                {
-                    renderer_.drawItems(items,camera_,window_.aspectRatio(),scene_.lighting(),
-                        shadow ? &*shadow : nullptr,true);
-                }, config_.exposure);
-            }
-            else
-            {
-                renderer_.clear(color.r, color.g, color.b, color.a);
-                renderer_.drawItems(items,camera_,window_.aspectRatio(),scene_.lighting());
-            }
-            if (!ui_.empty())
-            {
-                if (!uiRenderer_)
-                {
-                    uiRenderer_ = std::make_unique<UiRenderer>(config_.uiFontPath);
-                }
-                uiRenderer_->render(ui_, window_.size(), size);
-            }
-            if (callbacks.afterRender)
-            {
-                callbacks.afterRender(*this);
-            }
-            // 检查本帧累计错误，不假定错误来自最后一条指令；Release移除此调试检查。
-            INFINITE_GL_CHECK("application frame");
-            if (window_.shouldClose())
-            {
-                break;
-            }
-            // 交换缓冲区，将本帧绘制结果呈现到窗口。
-            window_.swapBuffers();
+            renderFrame(callbacks, policy, size);
         }
     }
     catch (...)
     {
-        // Scene::update抛出异常前会恢复自身状态，所以此处可以安全清空物体。
+        // Scene::update抛出异常前会恢复自身状态，所以此处可以安全卸载当前关卡。
+        // 通过SceneManager清理也会同步currentName_，避免应用退出时留下错误的管理状态。
         // 不在析构函数里调用用户清理回调，防止第二次异常覆盖原始错误。
         if (callbacks.shutdown)
         {
             try { callbacks.shutdown(*this); }
             catch (...) { /* 保留主循环原始异常。 */ }
         }
-        scene_.clear();
+        sceneManager_.unload();
         throw;
     }
     if (callbacks.shutdown)
     {
         callbacks.shutdown(*this);
     }
-    scene_.clear();
+    sceneManager_.unload();
+}
+
+bool Application::processEvents(const ApplicationCallbacks &callbacks, bool paused,
+    StateFramePolicy &policy)
+{
+    // 暂停时等待事件而不是忙循环。每轮只收集一次事件，避免清掉刚收到的输入边沿。
+    if (paused)
+    {
+        window_.waitEvents(0.05);
+    }
+    else
+    {
+        window_.pollEvents();
+    }
+    if (window_.shouldClose())
+    {
+        return false;
+    }
+
+    if (callbacks.onEvents)
+    {
+        callbacks.onEvents(*this);
+    }
+    // UI在应用事件回调之后处理本帧输入，按钮回调可以安全地请求状态切换；
+    // 状态切换本身仍由ApplicationStateStack在下一帧安全边界提交。
+    ui_.processInput(input_.inputState(), glm::vec2(window_.size()));
+    // 关卡切换只在事件阶段提交，避免清空Scene时仍处于Scene::update遍历中。
+    sceneManager_.commitPending();
+    if (window_.shouldClose())
+    {
+        return false;
+    }
+
+    // 必须在事件和UI回调完成后读取策略，保证本帧使用的是当前应用状态的配置。
+    policy = callbacks.framePolicy
+        ? callbacks.framePolicy(*this)
+        : StateFramePolicy{};
+    return true;
+}
+
+void Application::updateFrame(const ApplicationCallbacks &callbacks,
+    const StateFramePolicy &policy, float deltaTime)
+{
+    if (callbacks.update)
+    {
+        callbacks.update(*this, deltaTime);
+    }
+    if (window_.shouldClose())
+    {
+        return;
+    }
+
+    float interpolationAlpha = 0.0f;
+    if (policy.simulatePhysics)
+    {
+        physicsWorld_.step(deltaTime, [&](float fixedDeltaTime)
+        {
+            // 静态碰撞体先读取本帧应用逻辑写入的Transform。
+            scene_.syncStaticPhysics(physicsWorld_);
+            if (callbacks.fixedUpdate)
+            {
+                callbacks.fixedUpdate(*this, fixedDeltaTime);
+            }
+            // fixedUpdate可能移动了静态物体，再同步一次确保本子步看到最新位姿。
+            scene_.syncStaticPhysics(physicsWorld_);
+        });
+        interpolationAlpha = physicsWorld_.interpolationAlpha();
+        scene_.syncDynamicPhysics(physicsWorld_, interpolationAlpha);
+        scene_.syncCharacterPhysics();
+        scene_.updateAreas();
+        if (callbacks.afterPhysics)
+        {
+            callbacks.afterPhysics(*this, interpolationAlpha);
+        }
+    }
+    else
+    {
+        // 暂停期间不保留旧的半步时间，恢复后从新的帧边界继续模拟。
+        physicsWorld_.resetAccumulator();
+    }
+    if (policy.updateScene)
+    {
+        scene_.update(deltaTime);
+    }
+    scene_.syncAudio();
+    // 音频状态在Scene更新后推进，保证后续接入AudioSourceComponent时
+    // 能够读取到本帧最新的Transform；音频不参与固定物理子步。
+    if (policy.updateAudio)
+    {
+        audioEvents_.dispatch(audio_, music_);
+        music_.update(deltaTime);
+        audio_.update(deltaTime);
+    }
+}
+
+void Application::renderFrame(const ApplicationCallbacks &callbacks,
+    const StateFramePolicy &policy, const glm::ivec2 &framebufferSize)
+{
+    // 清屏同时重置颜色和深度；Scene先画不透明组，再处理透明排序和状态恢复。
+    const auto &color = config_.clearColor;
+    const auto items = policy.renderScene ? scene_.renderItems() : std::vector<RenderItem>{};
+    std::optional<DirectionalShadowView> shadow;
+    if (config_.directionalShadow)
+    {
+        if (!config_.linearHdr) { throw std::invalid_argument("Directional shadows require linear HDR/PBR"); }
+        shadow = shadowMap_.render(items,scene_.lighting().mainLight().direction,*config_.directionalShadow);
+    }
+    if (config_.linearHdr)
+    {
+        hdrPipeline_.render(framebufferSize.x, framebufferSize.y, color, [&]
+        {
+            renderer_.drawItems(items,camera_,window_.aspectRatio(),scene_.lighting(),
+                shadow ? &*shadow : nullptr,true);
+        }, config_.exposure);
+    }
+    else
+    {
+        renderer_.clear(color.r, color.g, color.b, color.a);
+        renderer_.drawItems(items,camera_,window_.aspectRatio(),scene_.lighting());
+    }
+    if (!ui_.empty())
+    {
+        if (!uiRenderer_)
+        {
+            uiRenderer_ = std::make_unique<UiRenderer>(config_.uiFontPath);
+        }
+        uiRenderer_->render(ui_, window_.size(), framebufferSize);
+    }
+    if (callbacks.afterRender)
+    {
+        callbacks.afterRender(*this);
+    }
+    // 检查本帧累计错误，不假定错误来自最后一条指令；Release移除此调试检查。
+    INFINITE_GL_CHECK("application frame");
+    if (window_.shouldClose())
+    {
+        return;
+    }
+    // 交换缓冲区，将本帧绘制结果呈现到窗口。
+    window_.swapBuffers();
 }
 
 void Application::run(ApplicationStateStack &states)

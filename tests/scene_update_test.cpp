@@ -1,5 +1,6 @@
 #include "TestSupport.h"
 #include "scene/Scene.h"
+#include "scene/systems/SceneSystem.h"
 
 #include <iostream>
 #include <limits>
@@ -9,6 +10,14 @@ int main()
     try
     {
         Scene scene;
+        struct CountingSystem final : SceneSystem
+        {
+            std::vector<float> steps;
+            void update(Scene &, float deltaTime) override { steps.push_back(deltaTime); }
+        } system;
+        scene.registerSystem(system);
+        expectThrow<std::invalid_argument>([&] { scene.registerSystem(system); },
+            "Duplicate SceneSystem registration accepted");
         auto &first = scene.createObject("first");
         auto &second = scene.createObject("second");
         require(first.script().owner() == &first, "Script component owner is wrong");
@@ -27,6 +36,8 @@ int main()
         second.setUpdateCallback([&](GameObject &object, float) { order.push_back(object.id()); });
         scene.update(0.25f);
         require(order == std::vector<ObjectId>{first.id(), second.id()}, "Wrong update order");
+        require(system.steps.size() == 1 && system.steps.front() == 0.25f,
+            "SceneSystem did not run after object update");
         require(first.transform.position.x == 0.25f, "deltaTime not forwarded");
         second.setActive(false);
         order.clear();
@@ -68,6 +79,9 @@ int main()
         scene.clear();
         scene.createObject("after error");
         scene.update(0);
+        require(system.steps.size() == 8, "SceneSystem did not recover after update failure");
+        require(scene.unregisterSystem(system), "SceneSystem was not unregistered");
+        require(!scene.unregisterSystem(system), "Missing SceneSystem removal returned true");
         std::cout << "Scene update passed\n";
         return 0;
     }

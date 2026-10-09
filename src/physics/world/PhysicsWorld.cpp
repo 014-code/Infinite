@@ -1,5 +1,8 @@
 #include "physics/world/PhysicsWorld.h"
 
+#include "physics/world/PhysicsQueries.h"
+#include "physics/world/PhysicsSolver.h"
+
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -11,24 +14,11 @@
 
 namespace
 {
-    constexpr float POSITION_SLOP = 0.001f;
-    // 位置修正比例：低于1可以避免多个接触互相抢修造成抖动，代价是每步残留少量穿透。
-    constexpr float POSITION_CORRECTION = 0.8f;
-    // 恢复系数速度阈值：接近速度低于该值时不弹跳，否则靠重力压出的微小穿透会让
-    // 静止物体永远以微小速度抖动，无法进入休眠。
-    constexpr float RESTITUTION_VELOCITY_THRESHOLD = 1.0f;
-    constexpr float SLEEP_ANGULAR_THRESHOLD = 0.2f;
-
     bool isFinite(const glm::vec3 &value)
     {
         return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
     }
 
-    // 射线与包围盒的快速排除；不相交的体不进入精确求交。
-    bool rayHitsAabb(const Ray &ray, const Aabb &box)
-    {
-        return PhysicsRaycast::intersectBox(ray, box).has_value();
-    }
 }
 
 PhysicsWorld::PhysicsWorld() = default;
@@ -109,7 +99,7 @@ int PhysicsWorld::step(float frameDeltaTime, const FixedStepCallback &callback)
         {
             callback(fixedStep_);
         }
-        stepFixedOnce(fixedStep_);
+        PhysicsSolver::step(*this, fixedStep_);
         accumulator_ -= fixedStep_;
         ++steps;
     }
@@ -159,7 +149,25 @@ PhysicsBodyId PhysicsWorld::createStaticBody(const CollisionShape &shape, const 
     refreshWorldAabb(*body);
     const PhysicsBodyId id = body->id;
     bodies_.push_back(std::move(body));
-    indexById_[id] = bodies_.size() - 1;
+    const std::size_t index = bodies_.size() - 1;
+    std::list<PhysicsBodyId>::iterator orderPosition;
+    try
+    {
+        orderPosition = registrationOrder_.insert(registrationOrder_.end(), id);
+        indexById_.emplace(id, index);
+        orderById_.emplace(id, orderPosition);
+    }
+    catch (...)
+    {
+        indexById_.erase(id);
+        orderById_.erase(id);
+        if (!registrationOrder_.empty() && registrationOrder_.back() == id)
+        {
+            registrationOrder_.pop_back();
+        }
+        bodies_.pop_back();
+        throw;
+    }
     return id;
 }
 
@@ -197,9 +205,25 @@ bool PhysicsWorld::destroyBody(PhysicsBodyId id)
     {
         return false;
     }
-    bodies_.erase(bodies_.begin() + static_cast<std::ptrdiff_t>(entry->second));
-    // 删除会移动后续元素的下标，映射必须重建；这一步是O(n)，但删除本身远少于查询。
-    rebuildIndex();
+    const auto order = orderById_.find(id);
+    if (order == orderById_.end())
+    {
+        throw std::logic_error("Physics body registration order is inconsistent");
+    }
+
+    const std::size_t removedIndex = entry->second;
+    const std::size_t lastIndex = bodies_.size() - 1;
+    if (removedIndex != lastIndex)
+    {
+        // unique_ptr转移不会移动Body本身的地址；只更新被搬到空位的那个ID。
+        bodies_[removedIndex] = std::move(bodies_[lastIndex]);
+        indexById_[bodies_[removedIndex]->id] = removedIndex;
+    }
+    bodies_.pop_back();
+
+    registrationOrder_.erase(order->second);
+    orderById_.erase(order);
+    indexById_.erase(id);
     return true;
 }
 
@@ -207,18 +231,10 @@ void PhysicsWorld::clear()
 {
     bodies_.clear();
     indexById_.clear();
+    registrationOrder_.clear();
+    orderById_.clear();
     accumulator_ = 0.0f;
     lastNarrowphasePairCount_ = 0;
-}
-
-void PhysicsWorld::rebuildIndex()
-{
-    indexById_.clear();
-    indexById_.reserve(bodies_.size());
-    for (std::size_t index = 0; index < bodies_.size(); ++index)
-    {
-        indexById_[bodies_[index]->id] = index;
-    }
 }
 
 bool PhysicsWorld::contains(PhysicsBodyId id) const
@@ -234,10 +250,10 @@ std::size_t PhysicsWorld::bodyCount() const
 std::vector<PhysicsBodyId> PhysicsWorld::bodyIds() const
 {
     std::vector<PhysicsBodyId> ids;
-    ids.reserve(bodies_.size());
-    for (const std::unique_ptr<Body> &body : bodies_)
+    ids.reserve(registrationOrder_.size());
+    for (const PhysicsBodyId id : registrationOrder_)
     {
-        ids.push_back(body->id);
+        ids.push_back(id);
     }
     return ids;
 }
@@ -472,436 +488,18 @@ bool PhysicsWorld::isSleeping(PhysicsBodyId id) const
 std::optional<PhysicsWorld::RaycastResult> PhysicsWorld::raycast(const Ray &ray, float maxDistance,
     std::uint32_t queryMask) const
 {
-    if (!std::isfinite(maxDistance) || maxDistance < 0.0f)
-    {
-        throw std::invalid_argument("Raycast maxDistance must be finite and non-negative");
-    }
-    std::optional<RaycastResult> best;
-    for (const std::unique_ptr<Body> &body : bodies_)
-    {
-        if (!filterMatchesQuery(body->filter, queryMask))
-        {
-            continue;
-        }
-        // 有限形状先用包围盒排除；平面没有包围盒，直接进入精确求交。
-        if (body->worldAabb && !rayHitsAabb(ray, *body->worldAabb))
-        {
-            continue;
-        }
-
-        std::optional<RaycastHit> hit;
-        if (body->shape.holds<PlaneShape>())
-        {
-            glm::vec3 normal(0.0f);
-            float offset = 0.0f;
-            ShapeCollision::planeToWorld(body->shape.get<PlaneShape>(), body->position, body->rotation, normal,
-                offset);
-            hit = PhysicsRaycast::intersectPlane(ray, normal, offset);
-        }
-        else
-        {
-            // 碰撞体不含缩放，因此把射线变换到局部空间后t与世界空间一致。
-            const glm::mat4 inverseWorld = glm::inverse(ShapeCollision::composeTransform(body->position,
-                body->rotation));
-            const glm::vec3 localOrigin(inverseWorld * glm::vec4(ray.origin, 1.0f));
-            const glm::vec3 localDirection(inverseWorld * glm::vec4(ray.direction, 0.0f));
-            const Ray localRay(localOrigin, localDirection);
-
-            if (body->shape.holds<SphereShape>())
-            {
-                hit = PhysicsRaycast::intersectSphere(localRay, glm::vec3(0.0f),
-                    body->shape.get<SphereShape>().radius);
-            }
-            else if (body->shape.holds<BoxShape>())
-            {
-                const glm::vec3 &halfExtents = body->shape.get<BoxShape>().halfExtents;
-                hit = PhysicsRaycast::intersectBox(localRay, Aabb(-halfExtents, halfExtents));
-            }
-            else if (body->shape.holds<CapsuleShape>())
-            {
-                const CapsuleShape &capsule = body->shape.get<CapsuleShape>();
-                hit = PhysicsRaycast::intersectCapsule(localRay, capsule.radius, capsule.cylinderHeight);
-            }
-
-            // 命中点与法线需要回到世界空间；t在刚体变换下不变。
-            if (hit)
-            {
-                const glm::mat4 worldMatrix = ShapeCollision::composeTransform(body->position, body->rotation);
-                hit->point = glm::vec3(worldMatrix * glm::vec4(hit->point, 1.0f));
-                hit->normal = body->rotation * hit->normal;
-            }
-        }
-
-        if (hit && hit->t <= maxDistance && (!best || hit->t < best->hit.t))
-        {
-            best = RaycastResult{body->id, *hit, body->dynamic};
-        }
-    }
-    return best;
+    return PhysicsQueries::raycast(*this, ray, maxDistance, queryMask);
 }
 
 std::vector<PhysicsWorld::OverlapResult> PhysicsWorld::overlapShape(const CollisionShape &shape,
     const glm::vec3 &position, const glm::quat &rotation, std::uint32_t queryMask) const
 {
-    // 查询形状是平面时没有有限范围，且平面-平面组合不受支持，直接报错而不是返回空结果。
-    if (shape.holds<PlaneShape>())
-    {
-        throw std::invalid_argument("overlapShape does not accept a PlaneShape query");
-    }
-    const Aabb queryAabb = shape.localAabb().transformed(ShapeCollision::composeTransform(position, rotation));
-
-    std::vector<OverlapResult> results;
-    for (const std::unique_ptr<Body> &body : bodies_)
-    {
-        if (!filterMatchesQuery(body->filter, queryMask))
-        {
-            continue;
-        }
-        if (body->worldAabb && !queryAabb.intersects(*body->worldAabb))
-        {
-            continue;
-        }
-        const std::optional<ShapeContact> contact = ShapeCollision::collide(shape, position, rotation,
-            body->shape, body->position, body->rotation);
-        if (contact)
-        {
-            results.push_back(OverlapResult{body->id, *contact,
-                ShapeCollision::separationDirection(*contact, body->shape.holds<PlaneShape>()), body->dynamic});
-        }
-    }
-    return results;
-}
-
-void PhysicsWorld::collectSweepCandidates(std::vector<std::pair<std::size_t, std::size_t>> &candidates) const
-{
-    // 平面没有有限包围盒，不参与扫掠剪枝；它们由collectContacts单独与动态体配对。
-    std::vector<std::size_t> sorted;
-    sorted.reserve(bodies_.size());
-    for (std::size_t index = 0; index < bodies_.size(); ++index)
-    {
-        if (bodies_[index]->worldAabb)
-        {
-            sorted.push_back(index);
-        }
-    }
-    std::sort(sorted.begin(), sorted.end(),
-        [this](std::size_t left, std::size_t right)
-        {
-            return bodies_[left]->worldAabb->min.x < bodies_[right]->worldAabb->min.x;
-        });
-
-    for (std::size_t i = 0; i < sorted.size(); ++i)
-    {
-        const Aabb &current = *bodies_[sorted[i]]->worldAabb;
-        for (std::size_t j = i + 1; j < sorted.size(); ++j)
-        {
-            const Body &candidate = *bodies_[sorted[j]];
-            if (candidate.worldAabb->min.x > current.max.x)
-            {
-                break; // 后续体的min.x只会更大，可以结束本轮的扫描。
-            }
-            if (!current.intersects(*candidate.worldAabb))
-            {
-                continue;
-            }
-            if (!filtersInteract(bodies_[sorted[i]]->filter, candidate.filter))
-            {
-                continue; // 层/掩码不允许这一对，连候选对也不产生。
-            }
-            candidates.emplace_back(sorted[i], sorted[j]);
-        }
-    }
+    return PhysicsQueries::overlapShape(*this, shape, position, rotation, queryMask);
 }
 
 std::vector<std::pair<PhysicsBodyId, PhysicsBodyId>> PhysicsWorld::broadphasePairs() const
 {
-    std::vector<std::pair<std::size_t, std::size_t>> candidates;
-    collectSweepCandidates(candidates);
-
-    std::vector<std::pair<PhysicsBodyId, PhysicsBodyId>> pairs;
-    pairs.reserve(candidates.size());
-    for (const std::pair<std::size_t, std::size_t> &candidate : candidates)
-    {
-        pairs.emplace_back(bodies_[candidate.first]->id, bodies_[candidate.second]->id);
-    }
-    return pairs;
-}
-
-void PhysicsWorld::stepFixedOnce(float stepSeconds)
-{
-    // 1. 积分：只有未休眠的动态体参与。
-    for (std::unique_ptr<Body> &body : bodies_)
-    {
-        if (!body->dynamic)
-        {
-            continue;
-        }
-        body->previousPosition = body->position;
-        body->previousRotation = body->rotation;
-        if (body->sleeping)
-        {
-            body->force = glm::vec3(0.0f);
-            continue;
-        }
-        body->velocity += (gravity_ + body->force / body->settings.mass) * stepSeconds;
-        // 力是固定步级别的累加量，不会意外跨帧残留；需要持续施力的应用应每步重新调用。
-        body->force = glm::vec3(0.0f);
-        body->velocity *= std::max(0.0f, 1.0f - body->settings.linearDamping * stepSeconds);
-        body->angularVelocity *= std::max(0.0f, 1.0f - body->settings.angularDamping * stepSeconds);
-        body->position += body->velocity * stepSeconds;
-        const glm::vec3 angular = body->angularVelocity * stepSeconds;
-        const float angularLength = glm::length(angular);
-        if (angularLength > 0.0f)
-        {
-            // 小角度近似：用半角构造增量四元数，避免每步都做完整旋转矩阵运算。
-            const glm::quat delta(std::cos(angularLength * 0.5f),
-                angular * (std::sin(angularLength * 0.5f) / angularLength));
-            body->rotation = glm::normalize(body->rotation * delta);
-        }
-    }
-
-    // 2. 接触收集与求解。
-    std::vector<Contact> contacts;
-    collectContacts(contacts);
-    if (!contacts.empty())
-    {
-        solveVelocity(contacts);
-        correctPositions(contacts);
-    }
-
-    // 3. 休眠判定与包围盒刷新。
-    for (std::unique_ptr<Body> &body : bodies_)
-    {
-        if (body->dynamic && !body->sleeping && body->settings.allowSleep)
-        {
-            const bool slow = glm::length(body->velocity) < body->settings.sleepVelocityThreshold &&
-                glm::length(body->angularVelocity) < SLEEP_ANGULAR_THRESHOLD;
-            body->sleepTimer = slow ? body->sleepTimer + stepSeconds : 0.0f;
-            if (body->sleepTimer >= body->settings.sleepTime)
-            {
-                body->sleeping = true;
-                body->velocity = glm::vec3(0.0f);
-                body->angularVelocity = glm::vec3(0.0f);
-            }
-        }
-        refreshWorldAabb(*body);
-    }
-    ++fixedStepCount_;
-}
-
-void PhysicsWorld::collectContacts(std::vector<Contact> &contacts) const
-{
-    // 只有至少一侧是"醒着的动态体"时，接触才可能改变状态：
-    // 静态-静态、休眠动态-静态、休眠-休眠都不必进入窄相位。
-    const auto awakeDynamic = [this](std::size_t index)
-    {
-        const Body &body = *bodies_[index];
-        return body.dynamic && !body.sleeping;
-    };
-
-    // 有限体之间用扫掠剪枝候选对，避免对所有body做O(n²)全配对。
-    std::vector<std::pair<std::size_t, std::size_t>> candidates;
-    collectSweepCandidates(candidates);
-
-    std::size_t pairCount = 0;
-    for (const std::pair<std::size_t, std::size_t> &candidate : candidates)
-    {
-        const std::size_t first = candidate.first;
-        const std::size_t second = candidate.second;
-        if (!awakeDynamic(first) && !awakeDynamic(second))
-        {
-            continue;
-        }
-        // buildContact约定第一个下标是动态体，法线方向才是"把动态体推开"。
-        if (bodies_[first]->dynamic)
-        {
-            buildContact(first, second, contacts);
-        }
-        else
-        {
-            buildContact(second, first, contacts);
-        }
-        ++pairCount;
-    }
-
-    // 平面没有有限包围盒，无法参与扫掠；平面数量很少，直接与每个醒着的动态体配对。
-    for (std::size_t planeIndex = 0; planeIndex < bodies_.size(); ++planeIndex)
-    {
-        if (!bodies_[planeIndex]->shape.holds<PlaneShape>())
-        {
-            continue;
-        }
-        for (std::size_t dynamicIndex = 0; dynamicIndex < bodies_.size(); ++dynamicIndex)
-        {
-            if (dynamicIndex == planeIndex || !awakeDynamic(dynamicIndex))
-            {
-                continue;
-            }
-            if (!filtersInteract(bodies_[dynamicIndex]->filter, bodies_[planeIndex]->filter))
-            {
-                continue;
-            }
-            buildContact(dynamicIndex, planeIndex, contacts);
-            ++pairCount;
-        }
-    }
-    lastNarrowphasePairCount_ = pairCount;
-}
-
-void PhysicsWorld::buildContact(std::size_t indexA, std::size_t indexB, std::vector<Contact> &contacts) const
-{
-    const Body &a = *bodies_[indexA];
-    const Body &b = *bodies_[indexB];
-    const std::optional<ShapeContact> contact = ShapeCollision::collide(a.shape, a.position, a.rotation,
-        b.shape, b.position, b.rotation);
-    if (!contact)
-    {
-        return;
-    }
-
-    // ShapeCollision的法线约定：平面参与时是平面正侧法线，其余是"A指向B"。
-    // separationDirection把两种约定统一成"把动态体沿+normal推开"的分离方向。
-    const glm::vec3 separation = ShapeCollision::separationDirection(*contact, b.shape.holds<PlaneShape>());
-
-    Contact result;
-    result.a = indexA;
-    result.b = b.dynamic ? indexB : NO_BODY;
-    result.point = contact->point;
-    result.normal = separation;
-    result.penetration = contact->penetration;
-    // 恢复系数取两侧较大值；摩擦取几何平均，避免单侧为0时完全无摩擦或完全黏住。
-    const float restitutionA = a.settings.restitution;
-    const float restitutionB = b.dynamic ? b.settings.restitution : 0.0f;
-    result.restitution = std::max(restitutionA, restitutionB);
-    const float frictionA = a.settings.friction;
-    const float frictionB = b.dynamic ? b.settings.friction : 1.0f;
-    result.friction = std::sqrt(std::max(0.0f, frictionA * frictionB));
-    contacts.push_back(result);
-}
-
-void PhysicsWorld::solveVelocity(std::vector<Contact> &contacts)
-{
-    for (int iteration = 0; iteration < solverIterations_; ++iteration)
-    {
-        for (Contact &contact : contacts)
-        {
-            Body &a = *bodies_[contact.a];
-            Body &b = contact.b == NO_BODY ? a : *bodies_[contact.b];
-            const bool hasB = contact.b != NO_BODY;
-
-            // 唤醒被运动物体撞到的休眠体。
-            if (a.sleeping && hasB && !b.sleeping)
-            {
-                a.sleeping = false;
-                a.sleepTimer = 0.0f;
-            }
-            if (hasB && b.sleeping && !a.sleeping)
-            {
-                b.sleeping = false;
-                b.sleepTimer = 0.0f;
-            }
-            const bool aActive = !a.sleeping;
-            const bool bActive = !hasB || !b.sleeping;
-            if (!aActive && !bActive)
-            {
-                continue;
-            }
-
-            const float inverseMassA = aActive ? 1.0f / a.settings.mass : 0.0f;
-            const float inverseMassB = (hasB && bActive) ? 1.0f / b.settings.mass : 0.0f;
-            const float inverseMassSum = inverseMassA + inverseMassB;
-            if (inverseMassSum <= 0.0f)
-            {
-                continue;
-            }
-
-            const glm::vec3 relativeVelocity = a.velocity - (hasB ? b.velocity : glm::vec3(0.0f));
-            const float normalVelocity = glm::dot(relativeVelocity, contact.normal);
-            if (normalVelocity < 0.0f)
-            {
-                // 只有接触确实发生且接近速度足够大时才应用恢复系数，避免静止体持续微弹。
-                const float restitution = (contact.penetration > POSITION_SLOP &&
-                    -normalVelocity > RESTITUTION_VELOCITY_THRESHOLD) ? contact.restitution : 0.0f;
-                const float impulseMagnitude = -(1.0f + restitution) * normalVelocity / inverseMassSum;
-                const glm::vec3 impulse = contact.normal * impulseMagnitude;
-                if (aActive)
-                {
-                    a.velocity += impulse * inverseMassA;
-                }
-                if (hasB && bActive)
-                {
-                    b.velocity -= impulse * inverseMassB;
-                }
-
-                // 切向摩擦冲量：限制在库仑摩擦锥内。
-                const glm::vec3 afterRelative = a.velocity - (hasB ? b.velocity : glm::vec3(0.0f));
-                const float afterNormal = glm::dot(afterRelative, contact.normal);
-                const glm::vec3 tangent = afterRelative - contact.normal * afterNormal;
-                const float tangentLength = glm::length(tangent);
-                if (tangentLength > 1e-5f && contact.friction > 0.0f)
-                {
-                    const glm::vec3 tangentDirection = tangent / tangentLength;
-                    // 摩擦冲量抵抗切向相对速度，并限制在库仑摩擦锥内。
-                    float frictionMagnitude = -glm::dot(afterRelative, tangentDirection) / inverseMassSum;
-                    const float limit = contact.friction * impulseMagnitude;
-                    frictionMagnitude = std::clamp(frictionMagnitude, -limit, limit);
-                    const glm::vec3 frictionImpulse = tangentDirection * frictionMagnitude;
-                    if (aActive)
-                    {
-                        a.velocity += frictionImpulse * inverseMassA;
-                    }
-                    if (hasB && bActive)
-                    {
-                        b.velocity -= frictionImpulse * inverseMassB;
-                    }
-                }
-            }
-        }
-    }
-}
-
-void PhysicsWorld::correctPositions(std::vector<Contact> &contacts)
-{
-    // 位置修正独立于速度求解：直接按穿透深度把动态体推开，带slop避免抖动。
-    for (const Contact &contact : contacts)
-    {
-        Body &a = *bodies_[contact.a];
-        const bool hasB = contact.b != NO_BODY;
-        Body *b = hasB ? bodies_[contact.b].get() : nullptr;
-        const bool aActive = !a.sleeping;
-        const bool bActive = b != nullptr && !b->sleeping;
-        if (!aActive && !bActive)
-        {
-            continue;
-        }
-        const float inverseMassA = (a.dynamic && aActive) ? 1.0f / a.settings.mass : 0.0f;
-        const float inverseMassB = (b != nullptr && bActive) ? 1.0f / b->settings.mass : 0.0f;
-        const float inverseMassSum = inverseMassA + inverseMassB;
-        if (inverseMassSum <= 0.0f)
-        {
-            continue;
-        }
-        const float depth = contact.penetration - POSITION_SLOP;
-        if (depth <= 0.0f)
-        {
-            continue;
-        }
-        const glm::vec3 correction = contact.normal * (depth * POSITION_CORRECTION / inverseMassSum);
-        if (inverseMassA > 0.0f)
-        {
-            a.position += correction * inverseMassA;
-            // 位置被推开后速度沿法线的分离分量保持不变，避免贴墙时的额外能量。
-            const float normalVelocity = glm::dot(a.velocity, contact.normal);
-            if (normalVelocity < 0.0f)
-            {
-                a.velocity -= contact.normal * normalVelocity;
-            }
-        }
-        if (b != nullptr && inverseMassB > 0.0f)
-        {
-            b->position -= correction * inverseMassB;
-        }
-    }
+    return PhysicsQueries::broadphasePairs(*this);
 }
 
 void PhysicsWorld::refreshWorldAabb(Body &body)

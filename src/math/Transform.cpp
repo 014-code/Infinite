@@ -45,6 +45,9 @@ Transform &Transform::operator=(const Transform &other)
         position = other.position;
         scale = other.scale;
         rotation_ = other.rotation_;
+        // 赋值覆盖了局部变换，即使数值碰巧相同，也显式让缓存重新验证父节点关系。
+        localCacheValid_ = false;
+        worldCacheValid_ = false;
     }
     return *this;
 }
@@ -126,6 +129,7 @@ Transform::~Transform()
     for (Transform *child : children_)
     {
         child->parent_ = nullptr;
+        child->worldCacheValid_ = false;
     }
 }
 
@@ -162,6 +166,9 @@ void Transform::setParent(Transform *parent)
         siblings.erase(std::remove(siblings.begin(), siblings.end(), this), siblings.end());
     }
     parent_ = parent;
+    // worldMatrix会再次检查父节点指针和版本；显式失效让意图更清楚，
+    // 也避免父节点恰好使用相同版本号时误用旧缓存。
+    worldCacheValid_ = false;
 }
 
 Transform *Transform::parent()
@@ -181,22 +188,73 @@ const std::vector<Transform *> &Transform::children() const
 
 glm::mat4 Transform::localMatrix() const
 {
+    refreshLocalCache();
+    return localCache_;
+}
+
+glm::mat4 Transform::worldMatrix() const
+{
+    refreshLocalCache();
+    if (parent_ == nullptr)
+    {
+        if (!worldCacheValid_ || cachedParent_ != nullptr ||
+            cachedWorldLocalRevision_ != localRevision_)
+        {
+            worldCache_ = localCache_;
+            cachedParent_ = nullptr;
+            cachedParentWorldRevision_ = 0;
+            cachedWorldLocalRevision_ = localRevision_;
+            worldCacheValid_ = true;
+            bumpRevision();
+        }
+        return worldCache_;
+    }
+
+    // 先让父节点更新自己的缓存，再读取它的版本号；这样无论是父节点自身还是更高祖先
+    // 被直接修改，当前节点都能看到新的parent world revision。
+    const glm::mat4 parentWorld = parent_->worldMatrix();
+    if (!worldCacheValid_ || cachedParent_ != parent_ ||
+        cachedParentWorldRevision_ != parent_->worldRevision_ ||
+        cachedWorldLocalRevision_ != localRevision_)
+    {
+        worldCache_ = parentWorld * localCache_;
+        cachedParent_ = parent_;
+        cachedParentWorldRevision_ = parent_->worldRevision_;
+        cachedWorldLocalRevision_ = localRevision_;
+        worldCacheValid_ = true;
+        bumpRevision();
+    }
+    return worldCache_;
+}
+
+void Transform::refreshLocalCache() const
+{
+    if (localCacheValid_ && cachedPosition_ == position && cachedScale_ == scale &&
+        cachedRotation_ == rotation_)
+    {
+        return;
+    }
+
     // GLM按列向量约定组合矩阵；依次调用translate、rotate、scale后，
     // 顶点会先缩放，再旋转，最后平移，符合常用的局部变换语义。
     glm::mat4 local(1.0f);
     local = glm::translate(local, position);
     local *= glm::mat4_cast(rotation_);
     local = glm::scale(local, scale);
-    return local;
+    localCache_ = local;
+    cachedPosition_ = position;
+    cachedScale_ = scale;
+    cachedRotation_ = rotation_;
+    localCacheValid_ = true;
+    ++localRevision_;
+    if (localRevision_ == 0) { localRevision_ = 1; }
+    worldCacheValid_ = false;
 }
 
-glm::mat4 Transform::worldMatrix() const
+void Transform::bumpRevision() const noexcept
 {
-    if (parent_ == nullptr)
-    {
-        return localMatrix();
-    }
-    return parent_->worldMatrix() * localMatrix();
+    ++worldRevision_;
+    if (worldRevision_ == 0) { worldRevision_ = 1; }
 }
 
 glm::mat4 Transform::modelMatrix() const

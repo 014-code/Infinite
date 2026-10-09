@@ -26,6 +26,9 @@ enum class CullMode
 class Material
 {
 public:
+    Material(const Material &) = default;
+    Material &operator=(const Material &) = default;
+
     // 组合一个Shader、一个可选Texture和材质颜色。
     // 此入口只保存引用，不拥有这些资源的生命周期；被引用对象不得提前销毁或移动。
     explicit Material(
@@ -40,6 +43,11 @@ public:
 
     // 绑定Shader/纹理并上传材质uniform；不切换深度、混合或剔除，这些由Renderer管理。
     void use() const;
+
+    // 创建一个材质实例：颜色、渲染模式、剔除和PBR参数独立复制，Shader/Texture继续共享。
+    // 这是修改ResourceManager缓存材质前的推荐入口，避免一个物体的运行时改动污染其他物体。
+    // 克隆不会创建新的OpenGL资源，返回的Material仍须在有效OpenGL上下文销毁。
+    std::shared_ptr<Material> clone() const;
 
     // 修改材质颜色。Shader需要包含名为baseColor的vec4 uniform。
     void setBaseColor(const glm::vec4 &baseColor);

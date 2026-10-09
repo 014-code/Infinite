@@ -9,7 +9,7 @@ class ResourceManager;
 class Scene;
 
 // SceneManager第一阶段只负责同步关卡切换。
-// Loader在提交时向目标Scene创建对象；如果Loader抛异常，Manager会清空半成品并保留一致的空场景。
+// Loader先在临时Scene中创建对象，全部成功后才提交，失败时当前关卡保持不变。
 class SceneManager final
 {
 public:

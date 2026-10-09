@@ -47,7 +47,8 @@ public:
     std::shared_ptr<Mesh> loadMesh(const std::filesystem::path &path);
 
     // 第一次调用会解析材质文件，并通过本管理器加载其Shader和Texture。
-    // 返回共享实例：修改材质会影响所有共享者，不会自动写回材质文件，也没有热重载。
+    // 返回共享资源实例：读取属性是安全的，但修改材质会影响所有共享者。
+    // 需要对象独立参数时，先对返回值调用Material::clone()；修改不会写回材质文件，也没有热重载。
     // 材质加载失败不会缓存半成品，但已成功加载的Shader/Texture依赖可以留在缓存中。
     std::shared_ptr<Material> loadMaterial(const std::filesystem::path &path);
 
