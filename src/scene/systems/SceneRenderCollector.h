@@ -14,4 +14,7 @@ public:
     // 跳过禁用物体和未完成Mesh/Material绑定的物体。
     // 蒙皮矩阵在收集阶段计算，使Renderer不需要知道Scene或关节ID。
     static std::vector<RenderItem> collect(const Scene &scene);
+    // 将快照写入调用方提供的容器。容器只在本次调用中有效，调用前会清空旧快照。
+    // 允许Application跨帧复用vector容量，减少场景稳定后的临时分配。
+    static void collect(const Scene &scene, std::vector<RenderItem> &output);
 };

@@ -29,6 +29,7 @@ jobs:
             mingw-w64-ucrt-x86_64-glew
             mingw-w64-ucrt-x86_64-glm
             mingw-w64-ucrt-x86_64-stb
+            mingw-w64-ucrt-x86_64-miniaudio
       # 云端安装盘符不同，不使用为本机E盘配置的Preset。
       - name: Configure
         run: cmake -S . -B build-ci -G Ninja -DCMAKE_CXX_COMPILER=/ucrt64/bin/g++.exe -DCMAKE_PREFIX_PATH=/ucrt64 -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
@@ -48,7 +49,7 @@ jobs:
       - name: Install build and software rendering dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ libgl1-mesa-dev libgl1-mesa-dri libglx-mesa0 libglfw3-dev libglew-dev libglm-dev libstb-dev xvfb xauth
+          sudo apt-get install -y cmake ninja-build g++ libgl1-mesa-dev libgl1-mesa-dri libglx-mesa0 libglfw3-dev libglew-dev libglm-dev libstb-dev libminiaudio-dev xvfb xauth
       - name: Configure
         run: cmake -S . -B build-ci -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
       - name: Build

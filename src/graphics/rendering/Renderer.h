@@ -19,6 +19,8 @@ struct RenderStats
     std::size_t drawCalls = 0;
     std::size_t shaderChanges = 0;
     std::size_t materialChanges = 0;
+    std::size_t materialUploads = 0;
+    std::size_t lightingUploads = 0;
     std::size_t meshChanges = 0;
     std::size_t opaqueItems = 0;
     std::size_t transparentItems = 0;
@@ -43,6 +45,7 @@ public:
         bool requireLinearOutput = false) const;
 
     // 返回最近一次drawItems的统计快照；调用者只能读取，不应把它当成同步GPU计时结果。
+    // materialUploads和lightingUploads用于观察Renderer批次状态缓存是否生效。
     const RenderStats &lastStats() const noexcept { return lastStats_; }
 
     // 清空颜色和深度缓冲。临时开启深度写入以完成清理，随后恢复原写入开关。

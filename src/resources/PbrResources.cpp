@@ -28,3 +28,13 @@ std::shared_ptr<Material> PbrResources::createMaterial(const glm::vec4 &color, c
     result->setCullMode(CullMode::Back);
     return result;
 }
+
+void PbrResources::unloadUnused() noexcept
+{
+    // use_count为1表示Shader当前只由PbrResources自己持有；Model和Material仍然
+    // 需要它时都会额外持有shared_ptr，因此不会被这里错误释放。
+    if (shader_ && shader_.use_count() == 1)
+    {
+        shader_.reset();
+    }
+}

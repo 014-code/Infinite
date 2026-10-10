@@ -44,6 +44,11 @@ int main()
         auto differentTexture = resources.loadTexture(texturePath, differentOptions);
         require(differentTexture != texture, "Different Texture options reused one resource");
         require(resources.textureCount() == 2, "Texture options were not included in the cache key");
+        const auto initialStats = resources.cacheStatistics();
+        require(initialStats.shaders.cached == 1 && initialStats.shaders.referenced == 1,
+            "Shader cache statistics are wrong");
+        require(initialStats.textures.cached == 2 && initialStats.textures.referenced == 2,
+            "Texture cache statistics are wrong");
 
         // 清缓存只释放缓存自己的引用；调用者仍持有的资源必须继续有效。
         std::weak_ptr<Shader> shaderLifetime = shader;
@@ -61,6 +66,23 @@ int main()
         differentTexture.reset();
         require(shaderLifetime.expired() && textureLifetime.expired(),
             "Resources remained alive after cache and caller references were released");
+
+        // unloadUnused只释放没有调用方持有的缓存项；调用方仍持有时不能误删资源。
+        auto retainedShader = resources.loadShader(
+            shaderDirectory / "scene.vert", shaderDirectory / "scene.frag");
+        auto transientTexture = resources.loadTexture(texturePath);
+        std::weak_ptr<Shader> transientShaderLifetime = retainedShader;
+        std::weak_ptr<Texture> transientTextureLifetime = transientTexture;
+        resources.unloadUnused();
+        require(resources.shaderCount() == 1 && resources.textureCount() == 1,
+            "unloadUnused removed resources still held by the caller");
+        retainedShader.reset();
+        transientTexture.reset();
+        resources.unloadUnused();
+        require(resources.shaderCount() == 0 && resources.textureCount() == 0,
+            "unloadUnused kept unreferenced resources");
+        require(transientShaderLifetime.expired() && transientTextureLifetime.expired(),
+            "unloadUnused did not release unreferenced GPU resources");
 
         auto mesh = resources.loadMesh("tests/fixtures/assets/quad.obj");
         auto material = resources.loadMaterial("tests/fixtures/assets/test.material");

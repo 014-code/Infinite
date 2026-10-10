@@ -7,6 +7,8 @@ int main(int argc, char *argv[])
     try
     {
         ExampleRun example(argc, argv);
+        const auto directory = executableDirectory(argv[0]);
+        example.beginLogging(directory, "pbr_materials");
         ApplicationConfig config;
         config.title = "Infinite - PBR | rows: dielectric / metal; columns: roughness | WASD / RMB";
         config.visible = example.visible();
@@ -18,6 +20,7 @@ int main(int argc, char *argv[])
         callbacks.update = [&](Application &app, float dt)
         { camera.update(app.camera(), app.input(), dt, app.window().isFocused()); };
         application.run(callbacks);
+        example.finishLogging("pbr_materials");
         return 0;
     }
     catch (const std::exception &error)

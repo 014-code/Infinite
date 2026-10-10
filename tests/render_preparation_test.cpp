@@ -45,7 +45,9 @@ int main()
         renderer.drawItems(items, camera, 1);
         require(renderer.lastStats().drawCalls == items.size() &&
                 renderer.lastStats().opaqueItems == 64 &&
-                renderer.lastStats().transparentItems == 64,
+                renderer.lastStats().transparentItems == 64 &&
+                renderer.lastStats().materialUploads == 2 &&
+                renderer.lastStats().lightingUploads == 1,
             "Render queue statistics do not match submitted items");
         std::cout << "Cold batch driver uniform queries: " << probe.calls() << '\n';
         std::array<double, 5> samples;

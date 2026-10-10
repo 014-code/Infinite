@@ -3,6 +3,7 @@
 #include "math/Transform.h"
 #include "physics/world/PhysicsWorld.h"
 #include "scene/GameObject.h"
+#include "scene/components/PhysicsTransformRules.h"
 
 #include <algorithm>
 #include <utility>
@@ -37,6 +38,11 @@ void AreaComponent::poll(const Transform &transform)
     {
         return;
     }
+
+    // Area查询使用的是世界空间形状，而CollisionShape已经包含了区域尺寸。
+    // 因此不能把带父节点或非单位缩放的局部Transform直接当成世界位姿使用。
+    // 这里每次轮询都校验，覆盖绑定后调用方才修改Transform的情况。
+    PhysicsTransformRules::validate(transform);
 
     const auto overlaps = world_->overlapShape(*shape_, transform.position,
         transform.rotation(), queryMask_);

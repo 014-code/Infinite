@@ -44,7 +44,8 @@ public:
     void setBodyEnteredCallback(BodyCallback callback) { bodyEntered_ = std::move(callback); }
     void setBodyExitedCallback(BodyCallback callback) { bodyExited_ = std::move(callback); }
 
-    // Scene在固定物理步完成后调用；Transform使用物体当前的位置和旋转。
+    // Scene在固定物理步完成后调用；Transform必须是根节点且使用单位缩放。
+    // 区域的尺寸由CollisionShape保存，不会从Transform.scale自动推导。
     // 先更新集合，再调用用户回调，避免回调查询时看到半更新状态。
     void poll(const Transform &transform);
     void clearOverlaps() noexcept { overlapping_.clear(); }

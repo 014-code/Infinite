@@ -171,6 +171,9 @@ const CharacterBodyComponent &GameObject::characterBody() const
 void GameObject::setArea(PhysicsWorld &world, const CollisionShape &shape,
     std::uint32_t queryMask)
 {
+    // Area和PhysicsBody一样把物体Transform解释为世界空间位姿；
+    // 先校验再替换旧Area，失败时不会破坏原有查询区域。
+    PhysicsTransformRules::validate(transform);
     area_.attach(world, shape, queryMask);
 }
 

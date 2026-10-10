@@ -7,6 +7,8 @@ int main(int argc,char *argv[])
     try
     {
         ExampleRun example(argc,argv);
+        const auto directory = executableDirectory(argv[0]);
+        example.beginLogging(directory, "directional_shadow");
         ApplicationConfig config;
         config.title="Infinite - Directional shadows | H: toggle shadows | WASD / RMB";
         config.visible=example.visible(); config.linearHdr=true;
@@ -44,6 +46,7 @@ int main(int argc,char *argv[])
             camera.update(application.camera(),application.input(),dt,application.window().isFocused());
         };
         app.run(callbacks);
+        example.finishLogging("directional_shadow");
         return 0;
     }
     catch (const std::exception &error) { LOG_ERROR(error.what()); return 1; }

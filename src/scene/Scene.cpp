@@ -250,3 +250,8 @@ std::vector<RenderItem> Scene::renderItems() const
 {
     return SceneRenderCollector::collect(*this);
 }
+
+void Scene::collectRenderItems(std::vector<RenderItem> &output) const
+{
+    SceneRenderCollector::collect(*this, output);
+}

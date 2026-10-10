@@ -4,7 +4,7 @@
 #include "audio/AudioVoice.h"
 #include "audio/AudioTypes.h"
 
-#include <miniaudio/miniaudio.h>
+#include "audio/internal/MiniaudioInclude.h"
 
 #include <cstddef>
 #include <cstdint>

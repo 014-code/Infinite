@@ -94,6 +94,9 @@ public:
     // 收集一次本帧快照供阴影/颜色通道共用。资源和Transform仍是借用，消费前不得增删场景。
     // 有蒙皮的对象同时解析关节ID并计算矩阵；删除关节会在任何绘制前报错。
     std::vector<RenderItem> renderItems() const;
+    // 将本帧快照写入可复用容器，适合Application等每帧都需要渲染列表的调用方。
+    // output只在本次收集完成后有效；下一次收集会清空并重建其中的借用指针。
+    void collectRenderItems(std::vector<RenderItem> &output) const;
 
     // 跳过禁用和空物体，交给Renderer统一绘制；不清屏、不更新逻辑、不交换缓冲。
     // 调用期间不得增删物体或销毁/移动其资源；窗口上下文必须有效。

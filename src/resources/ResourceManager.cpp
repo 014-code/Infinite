@@ -17,6 +17,44 @@
 
 namespace
 {
+    template<class Cache>
+    ResourceManager::CacheEntryStats collectCacheStats(const Cache &cache) noexcept
+    {
+        ResourceManager::CacheEntryStats result;
+        result.cached = cache.size();
+        for (const auto &entry : cache)
+        {
+            if (entry.second.use_count() > 1)
+            {
+                ++result.referenced;
+            }
+        }
+        return result;
+    }
+
+    template<class Cache>
+    void unloadUnusedEntries(Cache &cache) noexcept
+    {
+        for (auto entry = cache.begin(); entry != cache.end();)
+        {
+            if (entry->second.use_count() == 1)
+            {
+                entry = cache.erase(entry);
+            }
+            else
+            {
+                ++entry;
+            }
+        }
+    }
+
+    ResourceManager::CacheEntryStats combineCacheStats(
+        const ResourceManager::CacheEntryStats &first,
+        const ResourceManager::CacheEntryStats &second) noexcept
+    {
+        return {first.cached + second.cached, first.referenced + second.referenced};
+    }
+
     // 缓存键不直接使用调用者传入的相对路径，否则从不同工作目录或使用
     // "assets/../assets/a.ppm" 这样的写法会生成重复的GPU资源。
     std::filesystem::path normalizedPath(const std::filesystem::path &path)
@@ -223,6 +261,31 @@ void ResourceManager::clear() noexcept
     meshes_.clear();
     textures_.clear();
     shaders_.clear();
+}
+
+void ResourceManager::unloadUnused() noexcept
+{
+    // Model内部保存Mesh、Material和纹理；必须先释放不再使用的Model，
+    // 后面的缓存才有机会观察到这些依赖已经没有额外引用。
+    unloadUnusedEntries(models_);
+    unloadUnusedEntries(pbrModels_);
+    pbrResources_.unloadUnused();
+
+    unloadUnusedEntries(materials_);
+    unloadUnusedEntries(meshes_);
+    unloadUnusedEntries(textures_);
+    unloadUnusedEntries(shaders_);
+}
+
+ResourceManager::CacheStatistics ResourceManager::cacheStatistics() const noexcept
+{
+    CacheStatistics result;
+    result.shaders = collectCacheStats(shaders_);
+    result.textures = collectCacheStats(textures_);
+    result.meshes = collectCacheStats(meshes_);
+    result.materials = collectCacheStats(materials_);
+    result.models = combineCacheStats(collectCacheStats(models_), collectCacheStats(pbrModels_));
+    return result;
 }
 
 std::size_t ResourceManager::shaderCount() const noexcept

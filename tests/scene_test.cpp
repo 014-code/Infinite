@@ -46,6 +46,9 @@ int main()
         scene.clear();
         require(scene.objectCount() == 0 && scene.findObject(firstId) == nullptr, "Clear did not remove objects");
         require(scene.createObject("after clear").id() > lastId, "Clear reused stale IDs");
+        std::vector<RenderItem> reusableItems(1);
+        scene.collectRenderItems(reusableItems);
+        require(reusableItems.empty(), "Render snapshot did not clear stale entries");
         // 空物体不会形成绘制项，因此这里即使没有上下文也不应执行任何GL调用。
         Renderer renderer;
         Camera camera;

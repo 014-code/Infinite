@@ -26,6 +26,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 #include <glm/vec4.hpp>
 
 struct ApplicationConfig
@@ -117,10 +118,9 @@ public:
     std::optional<DirectionalShadowSettings> &directionalShadow() { return config_.directionalShadow; }
 
 private:
-    // 处理一帧开始阶段的窗口和输入事件，并在所有可能影响场景的事件完成后
-    // 读取本帧策略。返回false表示窗口已经请求关闭，主循环应立即结束。
-    bool processEvents(const ApplicationCallbacks &callbacks, bool paused,
-        StateFramePolicy &policy);
+    // 处理窗口事件、输入和关卡切换，并在所有可能影响场景的事件完成后读取本帧策略。
+    // 窗口轮询和暂停判断由ApplicationLoop统一维护，这里只负责引擎层事件分发。
+    void processEvents(const ApplicationCallbacks &callbacks, StateFramePolicy &policy);
     // 推进一帧的游戏逻辑、固定物理子步、场景服务和音频服务。
     // 物理同步顺序在这里集中维护，避免主循环和其他入口产生不同的模拟规则。
     void updateFrame(const ApplicationCallbacks &callbacks,
@@ -152,6 +152,9 @@ private:
     UiCanvas ui_;
     // UI渲染器延迟到第一次真正有控件需要绘制时创建，避免空白Application额外编译Shader。
     std::unique_ptr<UiRenderer> uiRenderer_;
+    // 跨帧复用渲染快照的容器，避免Scene稳定后每帧重新分配RenderItem数组。
+    // 元素只保存对Scene资源的借用指针，下一帧收集前必须清空并重新生成。
+    std::vector<RenderItem> renderItems_;
     // 声明在Scene之前，析构时Scene会先销毁并注销其物理组件，最后才销毁物理世界。
     PhysicsWorld physicsWorld_;
     Scene scene_{primitiveResources_, resources_};

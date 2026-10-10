@@ -25,6 +25,23 @@ class Model;
 class ResourceManager final
 {
 public:
+    struct CacheEntryStats
+    {
+        // cached表示该类资源在ResourceManager中保存的键数量；
+        // referenced表示其中仍被缓存外的其他资源或调用方引用的键数量。
+        std::size_t cached = 0;
+        std::size_t referenced = 0;
+    };
+
+    struct CacheStatistics
+    {
+        CacheEntryStats shaders;
+        CacheEntryStats textures;
+        CacheEntryStats meshes;
+        CacheEntryStats materials;
+        CacheEntryStats models;
+    };
+
     ResourceManager() = default;
     ResourceManager(const ResourceManager &) = delete;
     ResourceManager &operator=(const ResourceManager &) = delete;
@@ -62,6 +79,15 @@ public:
 
     // 清空缓存，但不会销毁仍被Scene、Material或应用局部shared_ptr持有的资源。
     void clear() noexcept;
+
+    // 只清理当前没有被缓存外引用的条目，适合SceneManager切换关卡后主动回收资源。
+    // 清理顺序从上层Model开始，再处理Material、Mesh、Texture和Shader，保证依赖先释放。
+    // 这个函数不会启动后台线程，也不会在加载过程中自动触发，生命周期完全由应用控制。
+    void unloadUnused() noexcept;
+
+    // 返回当前缓存快照，便于调试资源增长和验证场景切换后的清理结果。
+    // referenced不等同于“有几个外部shared_ptr”，它按条目统计是否存在缓存以外的引用。
+    CacheStatistics cacheStatistics() const noexcept;
 
     // 这些计数只表示缓存当前持有的条目数量，不代表应用外部shared_ptr的数量，
     // 方便调试缓存命中和测试资源释放时机。

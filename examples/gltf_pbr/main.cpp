@@ -8,6 +8,8 @@ int main(int argc, char *argv[])
     try
     {
         ExampleRun example(argc, argv);
+        const auto directory = executableDirectory(argv[0]);
+        example.beginLogging(directory, "gltf_pbr");
         ApplicationConfig config;
         config.title = "Infinite - glTF PBR | Original Avocado | WASD / RMB";
         config.visible = example.visible(); config.linearHdr = true;
@@ -16,7 +18,6 @@ int main(int argc, char *argv[])
         settings.startPosition = {0, 1.8f, 5}; settings.startYaw = glm::radians(-90.0f);
         settings.startPitch = glm::radians(-8.0f);
         FreeCameraController camera(settings);
-        const auto directory = executableDirectory(argv[0]);
         auto callbacks = example.callbacks();
         callbacks.initialize = [&](Application &application)
         {
@@ -36,6 +37,7 @@ int main(int argc, char *argv[])
         callbacks.update = [&](Application &application, float dt)
         { camera.update(application.camera(), application.input(), dt, application.window().isFocused()); };
         app.run(callbacks);
+        example.finishLogging("gltf_pbr");
         return 0;
     }
     catch (const std::exception &error) { LOG_ERROR(error.what()); return 1; }

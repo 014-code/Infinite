@@ -7,6 +7,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$exampleManifest = Join-Path $projectRoot 'cmake/EngineExamples.cmake'
 $buildRoot = Join-Path $projectRoot 'build-ucrt64-release'
 $cmake = Join-Path $Toolchain 'bin/cmake.exe'
 $ctest = Join-Path $Toolchain 'bin/ctest.exe'
@@ -16,6 +17,29 @@ $workingRoot = Join-Path $runRoot '工作目录 与exe不同'
 $oldPath = $env:PATH
 $results = [System.Collections.Generic.List[object]]::new()
 New-Item -ItemType Directory -Path $workingRoot -Force | Out-Null
+
+function Read-ExampleManifest {
+    if (!(Test-Path -LiteralPath $exampleManifest -PathType Leaf)) {
+        throw "Example manifest was not found: $exampleManifest"
+    }
+
+    # 清单采用“一行一个CMake列表项”，脚本只接受小写字母、数字和下划线，
+    # 这样注释或格式错误不会被误当成示例目录继续执行。
+    $entries = @(Get-Content -LiteralPath $exampleManifest | ForEach-Object {
+        $entry = $_.Trim()
+        if ($entry -match '^[a-z0-9_]+$') {
+            $entry
+        }
+    })
+    if ($entries.Count -eq 0) {
+        throw "Example manifest is empty: $exampleManifest"
+    }
+    $duplicates = @($entries | Group-Object | Where-Object Count -gt 1)
+    if ($duplicates.Count -gt 0) {
+        throw "Example manifest contains duplicate entries: $($duplicates.Name -join ', ')"
+    }
+    return $entries
+}
 
 function Invoke-NativeChecked {
     param([string]$Program, [string[]]$Arguments)
@@ -79,7 +103,7 @@ try {
     Invoke-NativeChecked $ctest @('--preset', 'msys2-ucrt64-release')
     Invoke-NativeChecked $cmake @('--install', $buildRoot, '--prefix', $packageRoot)
 
-    $examples = @('color_triangle', 'textured_quad', 'textured_cube', 'diffuse_lighting', 'player_controller', 'alpha_blending', 'scene_objects', 'asset_scene', 'gltf_model', 'application_template', 'material_showcase', 'primitive_shapes', 'scene_lighting')
+    $examples = Read-ExampleManifest
     foreach ($name in $examples) {
         $exe = Join-Path $packageRoot "examples/$name/$name.exe"
         Invoke-PackagedExample $exe $name

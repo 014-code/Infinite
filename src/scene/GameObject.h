@@ -89,6 +89,7 @@ public:
     const CharacterBodyComponent &characterBody() const;
 
     // Area是查询区域，不参与碰撞响应；事件在固定物理步完成后由Scene统一派发。
+    // 当前物理同步规则要求物体是根节点且使用单位缩放，区域尺寸直接由shape决定。
     void setArea(PhysicsWorld &world, const CollisionShape &shape,
         std::uint32_t queryMask = 0xFFFFFFFFu);
     void clearArea() noexcept;

@@ -29,6 +29,13 @@ void Material::use() const
 {
     // 先激活材质使用的Shader，再上传材质参数。
     shader_->use();
+    applyParameters();
+}
+
+void Material::applyParameters() const
+{
+    // 调用方必须保证shader_已经是当前OpenGL程序；Renderer会在批次状态缓存中
+    // 维护这个前置条件，低层调用方则应使用Material::use()而不是直接调用本函数。
     shader_->setVec4("baseColor", baseColor_);
     shader_->setInt("hasTexture", texture_ != nullptr ? 1 : 0);
 

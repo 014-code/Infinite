@@ -53,7 +53,18 @@ void PhysicsSolver::step(PhysicsWorld &world, float stepSeconds)
         }
     }
 
-    // 2. 接触收集与求解。
+    // 积分已经改变了动态体的位姿。接触收集依赖worldAabb做宽相位剪枝，
+    // 因此必须在进入宽相位之前刷新一次；否则高速移动的刚体仍会使用上一固定步的AABB，
+    // 可能在本固定步已经进入碰撞体，却因为旧包围盒相距太远而完全漏掉接触。
+    for (auto &body : world.bodies_)
+    {
+        if (body->dynamic && !body->sleeping)
+        {
+            world.refreshWorldAabb(*body);
+        }
+    }
+
+    // 2. 接触收集与求解：此时宽相位看到的是当前积分后位姿对应的AABB。
     std::vector<Contact> contacts;
     collectContacts(world, contacts);
     if (!contacts.empty())
@@ -62,7 +73,9 @@ void PhysicsSolver::step(PhysicsWorld &world, float stepSeconds)
         correctPositions(world, contacts);
     }
 
-    // 3. 休眠判定与包围盒刷新。
+    // 3. 休眠判定与最终包围盒刷新。
+    // 位置修正可能再次改变刚体位置，因此这里仍需刷新，保证下一固定步和查询接口
+    // 使用的是最终位姿对应的包围盒。
     for (auto &body : world.bodies_)
     {
         if (body->dynamic && !body->sleeping && body->settings.allowSleep)

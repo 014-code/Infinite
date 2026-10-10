@@ -317,6 +317,21 @@ int main()
                 "Overlapping bodies did not produce a narrowphase pair");
         }
         {
+            // 高速移动的刚体必须使用积分后的AABB参与宽相位，否则会沿用上一帧的包围盒而漏检。
+            PhysicsWorld fastWorld;
+            fastWorld.setGravity(glm::vec3(0.0f));
+            fastWorld.createStaticBody(CollisionShape(BoxShape(glm::vec3(0.5f))), glm::vec3(0.0f));
+            RigidBodySettings settings;
+            settings.linearDamping = 0.0f;
+            settings.allowSleep = false;
+            const PhysicsBodyId body = fastWorld.createDynamicBody(sphere, glm::vec3(-3.0f, 0.0f, 0.0f),
+                settings);
+            fastWorld.setBodyVelocity(body, glm::vec3(180.0f, 0.0f, 0.0f));
+            fastWorld.step(STEP);
+            require(fastWorld.lastNarrowphasePairCount() == 1,
+                "Fast-moving sphere was missed by the broadphase");
+        }
+        {
             // 双方都休眠后不再需要接触：统计值应回落到0（无平面场景）。
             PhysicsWorld sleepPairWorld;
             sleepPairWorld.setGravity(glm::vec3(0.0f));

@@ -14,6 +14,7 @@ int main(int argc, char *argv[])
         ExampleRun run(argc, argv, ExampleFrameContent::DrawnScene);
         const bool smokeTest = argc == 2 && std::string_view(argv[1]) == "--smoke-test";
         const auto directory = executableDirectory(argv[0]);
+        run.beginLogging(directory, "game_flow");
 
         ApplicationConfig config;
         config.title = "Infinite - Game Flow";
@@ -29,6 +30,7 @@ int main(int argc, char *argv[])
         ApplicationStateStack states;
         states.push(GameFlowExample::createInitialState(states, session));
         application.run(states);
+        run.finishLogging("game_flow");
         return 0;
     }
     catch (const std::exception &exception)

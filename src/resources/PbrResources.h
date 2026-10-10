@@ -15,6 +15,8 @@ public:
     std::shared_ptr<Shader> shader();
     std::shared_ptr<Material> createMaterial(const glm::vec4 &color = glm::vec4(1),
         const PbrParameters &parameters = {});
+    // 只释放PbrResources自己的Shader引用；已有Material或Model仍在使用时保留Shader。
+    void unloadUnused() noexcept;
     void clear() { shader_.reset(); }
 private:
     std::shared_ptr<Shader> shader_;

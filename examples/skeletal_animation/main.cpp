@@ -9,6 +9,8 @@ int main(int argc, char *argv[])
     try
     {
         ExampleRun example(argc, argv);
+        const auto directory = executableDirectory(argv[0]);
+        example.beginLogging(directory, "skeletal_animation");
         ApplicationConfig config;
         config.title = "Infinite - Skinned Rigged Figure | P: pause | WASD / RMB";
         config.visible = example.visible(); config.linearHdr = true;
@@ -19,7 +21,6 @@ int main(int argc, char *argv[])
         settings.startPosition = {0,1.5f,4}; settings.startYaw = glm::radians(-90.0f);
         settings.startPitch = glm::radians(-12.0f);
         FreeCameraController camera(settings);
-        const auto directory = executableDirectory(argv[0]);
         auto callbacks = example.callbacks();
         callbacks.initialize = [&](Application &application)
         {
@@ -53,6 +54,7 @@ int main(int argc, char *argv[])
             camera.update(application.camera(),application.input(),dt,application.window().isFocused());
         };
         app.run(callbacks);
+        example.finishLogging("skeletal_animation");
         return 0;
     }
     catch (const std::exception &error) { LOG_ERROR(error.what()); return 1; }

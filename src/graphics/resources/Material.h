@@ -44,6 +44,11 @@ public:
     // 绑定Shader/纹理并上传材质uniform；不切换深度、混合或剔除，这些由Renderer管理。
     void use() const;
 
+    // 只上传当前材质的uniform并绑定纹理，不调用Shader::use。
+    // Renderer在同一批次内已经确认目标Shader处于当前程序时使用它，避免相同材质
+    // 的多个物体重复切换程序；普通调用方应继续使用上面的use()完整入口。
+    void applyParameters() const;
+
     // 创建一个材质实例：颜色、渲染模式、剔除和PBR参数独立复制，Shader/Texture继续共享。
     // 这是修改ResourceManager缓存材质前的推荐入口，避免一个物体的运行时改动污染其他物体。
     // 克隆不会创建新的OpenGL资源，返回的Material仍须在有效OpenGL上下文销毁。

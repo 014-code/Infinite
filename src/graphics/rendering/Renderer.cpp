@@ -41,21 +41,11 @@ namespace
             needsNormal ? lightingNormalMatrix(model) : glm::mat3(1.0f), needsNormal};
     }
 
-    // draw和drawItems共用实际绘制路径；批次内复用矩阵和已校验、归一化的灯光快照。
+    // 这一层只提交每个物体独有的uniform；Shader、材质和灯光状态由批次状态缓存处理。
     void drawPrepared(const PreparedDraw &item, const glm::mat4 &view,
-        const glm::mat4 &projection, const glm::vec3 &cameraPosition, const LightingUniforms &lighting,
-        const DirectionalShadowView *shadow = nullptr)
+        const glm::mat4 &projection, const glm::vec3 &cameraPosition)
     {
         const Shader &shader = item.material->shader();
-        item.material->use();
-        shader.setInt("shadowEnabled",shadow != nullptr);
-        if (shadow)
-        {
-            shader.setMat4("shadowMatrix",shadow->lightMatrix);
-            shader.setFloat("shadowBias",shadow->bias);
-            shader.setInt("shadowDepth",5);
-            glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D,shadow->texture);
-        }
         shader.setMat4("model", item.model);
         shader.setMat4("view", view);
         shader.setMat4("projection", projection);
@@ -66,9 +56,60 @@ namespace
         if (item.needsNormal) { shader.setMat3("normalMatrix", item.normal); }
         shader.setInt("skinEnabled", item.skin != nullptr && !item.skin->empty());
         if (item.skin && !item.skin->empty()) { shader.setMat4Array("jointMatrices[0]", *item.skin); }
-        lighting.upload(shader);
         item.mesh->draw();
     }
+
+    // 一次drawItems调用内的OpenGL提交缓存。资源对象本身不记录“当前是否绑定”，
+    // 因为同一Material可能被不同Renderer或不同OpenGL上下文交替使用。
+    class RenderSubmissionState
+    {
+    public:
+        RenderSubmissionState(const LightingUniforms &lighting, const DirectionalShadowView *shadow)
+            : lighting_(lighting), shadow_(shadow)
+        {
+        }
+
+        void apply(const PreparedDraw &item)
+        {
+            const Shader &shader = item.material->shader();
+            if (shader_ != &shader)
+            {
+                shader.use();
+                shader.setInt("shadowEnabled", shadow_ != nullptr);
+                if (shadow_ != nullptr)
+                {
+                    shader.setMat4("shadowMatrix", shadow_->lightMatrix);
+                    shader.setFloat("shadowBias", shadow_->bias);
+                    shader.setInt("shadowDepth", 5);
+                    glActiveTexture(GL_TEXTURE5);
+                    glBindTexture(GL_TEXTURE_2D, shadow_->texture);
+                }
+                // 光照数据在同一批次中不变；不同Shader仍必须分别上传，
+                // 因为uniform location和链接结果属于各自的程序对象。
+                lighting_.upload(shader);
+                shader_ = &shader;
+                material_ = nullptr;
+                ++lightingUploads_;
+            }
+            if (material_ != item.material)
+            {
+                item.material->applyParameters();
+                material_ = item.material;
+                ++materialUploads_;
+            }
+        }
+
+        std::size_t materialUploads() const noexcept { return materialUploads_; }
+        std::size_t lightingUploads() const noexcept { return lightingUploads_; }
+
+    private:
+        const LightingUniforms &lighting_;
+        const DirectionalShadowView *shadow_ = nullptr;
+        const Shader *shader_ = nullptr;
+        const Material *material_ = nullptr;
+        std::size_t materialUploads_ = 0;
+        std::size_t lightingUploads_ = 0;
+    };
 
     // 作用域守卫：构造时保存，析构时恢复。后续draw抛异常也会自动执行恢复。
     // 这里只管理本次绘制会修改的状态，不接管帧缓冲、视口或调用者的uniform内容。
@@ -265,6 +306,7 @@ void Renderer::drawItems(const std::vector<RenderItem> &items, const Camera &cam
     const Material *previousMaterial = nullptr;
     const Mesh *previousMesh = nullptr;
     const RenderState savedState;
+    RenderSubmissionState submission(prepared, shadow);
     setDepthTestEnabled(true);
     setDepthWriteEnabled(true);
     setAlphaBlendingEnabled(false);
@@ -287,7 +329,8 @@ void Renderer::drawItems(const std::vector<RenderItem> &items, const Camera &cam
         }
         if (item.material->shaderOutputsSrgb() || !savedState.framebufferSrgb()) { glDisable(GL_FRAMEBUFFER_SRGB); }
         else { glEnable(GL_FRAMEBUFFER_SRGB); }
-        drawPrepared(item, view, projection, camera.position(), prepared, shadow);
+        submission.apply(item);
+        drawPrepared(item, view, projection, camera.position());
     };
     for (const auto &item : opaque)
     {
@@ -303,6 +346,8 @@ void Renderer::drawItems(const std::vector<RenderItem> &items, const Camera &cam
             drawItem(item);
         }
     }
+    lastStats_.materialUploads = submission.materialUploads();
+    lastStats_.lightingUploads = submission.lightingUploads();
     // savedState离开作用域时恢复调用者状态，而不是强行恢复为某套默认值。
 }
 
@@ -409,5 +454,7 @@ void Renderer::draw(const Mesh &mesh, const Material &material, const Transform 
     const LightingUniforms prepared(lighting);
     prepared.validateShader(material.shader());
     const auto item = prepareDraw(mesh, material, transform);
-    drawPrepared(item, camera.viewMatrix(), camera.projectionMatrix(aspectRatio), camera.position(), prepared);
+    RenderSubmissionState submission(prepared, nullptr);
+    submission.apply(item);
+    drawPrepared(item, camera.viewMatrix(), camera.projectionMatrix(aspectRatio), camera.position());
 }

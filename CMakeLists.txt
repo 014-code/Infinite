@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 project(InfiniteEngine LANGUAGES CXX)
 
 include(CTest)
+include(cmake/EngineExamples.cmake)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,7 +14,7 @@ find_package(GLEW REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_path(STB_IMAGE_INCLUDE_DIR NAMES stb/stb_image.h REQUIRED)
 find_path(STB_TRUETYPE_INCLUDE_DIR NAMES stb/stb_truetype.h REQUIRED)
-find_path(MINIAUDIO_INCLUDE_DIR NAMES miniaudio/miniaudio.h REQUIRED)
+find_path(MINIAUDIO_INCLUDE_DIR NAMES miniaudio/miniaudio.h miniaudio.h REQUIRED)
 find_library(MINIAUDIO_LIBRARY NAMES miniaudio REQUIRED)
 
 set(ENGINE_SOURCES
@@ -75,6 +76,7 @@ set(ENGINE_SOURCES
     src/assets/MaterialLoader.cpp
     src/assets/MeshLoader.cpp
     src/core/Application.cpp
+    src/core/ApplicationLoop.cpp
     src/core/FrameTiming.cpp
     src/core/Log.cpp
     src/core/Time.cpp

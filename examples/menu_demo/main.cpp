@@ -101,6 +101,8 @@ int main(int argc, char *argv[])
     {
         const bool smokeTest = argc == 2 && std::string_view(argv[1]) == "--smoke-test";
         ExampleRun run(argc, argv);
+        const auto directory = executableDirectory(argv[0]);
+        run.beginLogging(directory, "menu_demo");
         ApplicationConfig config;
         config.title = "Infinite - Menu States";
         config.visible = run.visible();
@@ -109,6 +111,7 @@ int main(int argc, char *argv[])
         ApplicationStateStack states;
         states.push(makeMainMenu(smokeTest));
         application.run(states);
+        run.finishLogging("menu_demo");
         return 0;
     }
     catch (const std::exception &exception)

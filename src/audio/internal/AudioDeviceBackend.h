@@ -2,7 +2,7 @@
 
 #include "audio/AudioTypes.h"
 
-#include <miniaudio/miniaudio.h>
+#include "audio/internal/MiniaudioInclude.h"
 
 #include <array>
 #include <memory>

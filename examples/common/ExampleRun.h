@@ -44,6 +44,22 @@ public:
         return !smoke_;
     }
 
+    // 手写Application主循环的示例也要复用统一日志入口，确保交付验收和普通
+    // runExample示例拥有相同的启动、结束和错误诊断格式。
+    void beginLogging(const std::filesystem::path &executableDirectory, std::string_view name) const
+    {
+        if (!Log::setFile(executableDirectory / "logs" / (std::string(name) + ".log")))
+        {
+            LOG_WARN("Cannot open log file; console logging remains available");
+        }
+        LOG_INFO(std::string("Starting ") + std::string(name) + " example (Escape exits)");
+    }
+
+    void finishLogging(std::string_view name) const
+    {
+        LOG_INFO(std::string(name) + " example stopped");
+    }
+
     // 通用的示例策略仍在应用层：Escape退出、三帧冒烟都不是引擎的固定规则。
     ApplicationCallbacks callbacks()
     {
@@ -133,11 +149,7 @@ inline int runExample(int argc, char *argv[], const char *name, const char *titl
         ExampleRun run(argc, argv, content);
         // 在窗口创建前打开日志，启动失败也能留下记录；路径不依赖当前工作目录。
         const auto directory = executableDirectory(argv[0]);
-        if (!Log::setFile(directory / "logs" / (std::string(name) + ".log")))
-        {
-            LOG_WARN("Cannot open log file; console logging remains available");
-        }
-        LOG_INFO(std::string("Starting ") + name + " example (Escape exits)");
+        run.beginLogging(directory, name);
         ApplicationConfig config;
         config.title = title;
         config.visible = run.visible();
@@ -152,7 +164,7 @@ inline int runExample(int argc, char *argv[], const char *name, const char *titl
         callbacks.fixedUpdate = fixedUpdate;
         callbacks.afterPhysics = afterPhysics;
         application.run(callbacks);
-        LOG_INFO(std::string(name) + " example stopped");
+        run.finishLogging(name);
         return 0;
     }
     catch (const std::exception &exception)

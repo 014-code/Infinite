@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "Time.h"
+#include "ApplicationLoop.h"
 #include "game/state/ApplicationStateStack.h"
 #include "graphics/rendering/OpenGLDebug.h"
 #include "ui/UiRenderer.h"
@@ -57,35 +57,22 @@ void Application::run(const ApplicationCallbacks &callbacks)
         }
         INFINITE_GL_CHECK("application initialization");
 
-        // 初始化完成后才开始计时，避免第一次移动包含Shader编译和图片解码耗时。
-        Time clock;
-        bool paused = false;
-        while (!window_.shouldClose())
+        StateFramePolicy policy;
+        ApplicationLoop loop(window_, timing_);
+        ApplicationLoopCallbacks loopCallbacks;
+        loopCallbacks.processEvents = [&]
         {
-            StateFramePolicy policy;
-            if (!processEvents(callbacks, paused, policy))
-            {
-                break;
-            }
-
-            const auto size = window_.framebufferSize();
-            paused = window_.isMinimized() || size.x <= 0 || size.y <= 0;
-            clock.update();
-            timing_.advance(clock.deltaTime(), paused);
-            if (paused)
-            {
-                continue;
-            }
-
-            const float deltaTime = timing_.frame().deltaTime;
+            processEvents(callbacks, policy);
+        };
+        loopCallbacks.update = [&](float deltaTime)
+        {
             updateFrame(callbacks, policy, deltaTime);
-            if (window_.shouldClose())
-            {
-                break;
-            }
-
-            renderFrame(callbacks, policy, size);
-        }
+        };
+        loopCallbacks.render = [&](const glm::ivec2 &framebufferSize)
+        {
+            renderFrame(callbacks, policy, framebufferSize);
+        };
+        loop.run(loopCallbacks);
     }
     catch (...)
     {
@@ -107,23 +94,8 @@ void Application::run(const ApplicationCallbacks &callbacks)
     sceneManager_.unload();
 }
 
-bool Application::processEvents(const ApplicationCallbacks &callbacks, bool paused,
-    StateFramePolicy &policy)
+void Application::processEvents(const ApplicationCallbacks &callbacks, StateFramePolicy &policy)
 {
-    // 暂停时等待事件而不是忙循环。每轮只收集一次事件，避免清掉刚收到的输入边沿。
-    if (paused)
-    {
-        window_.waitEvents(0.05);
-    }
-    else
-    {
-        window_.pollEvents();
-    }
-    if (window_.shouldClose())
-    {
-        return false;
-    }
-
     if (callbacks.onEvents)
     {
         callbacks.onEvents(*this);
@@ -135,14 +107,13 @@ bool Application::processEvents(const ApplicationCallbacks &callbacks, bool paus
     sceneManager_.commitPending();
     if (window_.shouldClose())
     {
-        return false;
+        return;
     }
 
     // 必须在事件和UI回调完成后读取策略，保证本帧使用的是当前应用状态的配置。
     policy = callbacks.framePolicy
         ? callbacks.framePolicy(*this)
         : StateFramePolicy{};
-    return true;
 }
 
 void Application::updateFrame(const ApplicationCallbacks &callbacks,
@@ -205,7 +176,16 @@ void Application::renderFrame(const ApplicationCallbacks &callbacks,
 {
     // 清屏同时重置颜色和深度；Scene先画不透明组，再处理透明排序和状态恢复。
     const auto &color = config_.clearColor;
-    const auto items = policy.renderScene ? scene_.renderItems() : std::vector<RenderItem>{};
+    if (policy.renderScene)
+    {
+        // 复用Application持有的容器；阴影通道和颜色通道共享本帧同一份快照。
+        scene_.collectRenderItems(renderItems_);
+    }
+    else
+    {
+        renderItems_.clear();
+    }
+    const auto &items = renderItems_;
     std::optional<DirectionalShadowView> shadow;
     if (config_.directionalShadow)
     {
